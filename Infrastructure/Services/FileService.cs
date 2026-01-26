@@ -78,7 +78,16 @@ public class FileService : IFileService
     
     public async Task<List<FileMetadata>> GetFilesByObjectIdAsync(string objectId)
     {
-        return await _repository.GetQueryable().Where(f => f.ObjectId == objectId || f.Id==Guid.Parse(objectId)).ToListAsync();
+        if (Guid.TryParse(objectId, out var idAsGuid))
+        {
+            return await _repository.GetQueryable()
+                .Where(f => f.ObjectId == objectId || f.Id == idAsGuid)
+                .ToListAsync();
+        }
+        
+        return await _repository.GetQueryable()
+            .Where(f => f.ObjectId == objectId)
+            .ToListAsync();
     }
 
     public async Task<bool> DeleteFileAsync(Guid fileId)
