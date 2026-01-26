@@ -35,6 +35,12 @@ public static class ServiceCollectionExtensions
         {
             if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
             {
+                // Validate if connection string is actually for SQL Server (happens when Env Var is missing)
+                if (connectionString != null && (connectionString.Contains("Trusted_Connection") || connectionString.Contains("MultipleActiveResultSets")))
+                {
+                    throw new InvalidOperationException("CRITICAL CONFIG ERROR: DatabaseProvider is 'PostgreSQL' but ConnectionString looks like SQL Server. " +
+                        "Did you forget to set the Environment Variable 'ConnectionStrings__DefaultConnection' on Render? (Note the DOUBLE underscore).");
+                }
                 options.UseNpgsql(connectionString);
             }
             else
