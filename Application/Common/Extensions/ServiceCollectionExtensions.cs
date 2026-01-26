@@ -41,6 +41,28 @@ public static class ServiceCollectionExtensions
                     throw new InvalidOperationException("CRITICAL CONFIG ERROR: DatabaseProvider is 'PostgreSQL' but ConnectionString looks like SQL Server. " +
                         "Did you forget to set the Environment Variable 'ConnectionStrings__DefaultConnection' on Render? (Note the DOUBLE underscore).");
                 }
+                // Auto-fix Render/Cloud URI format (postgres://user:pass@host:port/db)
+                if (connectionString.StartsWith("postgres://"))
+                {
+                    try 
+                    {
+                        var uri = new Uri(connectionString);
+                        var userInfo = uri.UserInfo.Split(':');
+                        var builder = new Npgsql.NpgsqlConnectionStringBuilder
+                        {
+                            Host = uri.Host,
+                            Port = uri.Port,
+                            Database = uri.AbsolutePath.Trim('/'),
+                            Username = userInfo[0],
+                            Password = userInfo[1],
+                            SslMode = Npgsql.SslMode.Require,
+                            TrustServerCertificate = true
+                        };
+                        connectionString = builder.ToString();
+                    }
+                    catch { /* Fallback to original string if parse fails */ }
+                }
+
                 options.UseNpgsql(connectionString);
             }
             else
