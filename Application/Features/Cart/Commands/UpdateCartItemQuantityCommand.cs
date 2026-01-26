@@ -1,0 +1,56 @@
+﻿using BlogApi.Application.Common.Interfaces;
+using BlogApi.Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BlogApi.Application.Features.Cart.Commands;
+
+public record UpdateCartItemQuantityCommand(Guid ProductId, int Quantity) : IRequest<Unit>;
+
+public class UpdateCartItemQuantityCommandHandler : IRequestHandler<UpdateCartItemQuantityCommand, Unit>
+{
+    private readonly IGenericRepository<BlogApi.Domain.Entities.Cart, Guid> _cartRepository;
+    private readonly IGenericRepository<CartItem, Guid> _cartItemRepository;
+    private readonly ICurrentUserService _currentUserService;
+
+    public UpdateCartItemQuantityCommandHandler(
+        IGenericRepository<BlogApi.Domain.Entities.Cart, Guid> cartRepository,
+        IGenericRepository<CartItem, Guid> cartItemRepository,
+        ICurrentUserService currentUserService)
+    {
+        _cartRepository = cartRepository;
+        _cartItemRepository = cartItemRepository;
+        _currentUserService = currentUserService;
+    }
+
+    public async Task<Unit> Handle(UpdateCartItemQuantityCommand request, CancellationToken cancellationToken)
+    {
+        var userId = _currentUserService.UserId ?? throw new Exception("User not authenticated");
+
+        var cart = await _cartRepository.GetQueryable()
+            .FirstOrDefaultAsync(c => c.UserId == userId, cancellationToken);
+
+        if (cart == null) return Unit.Value;
+
+        var item = await _cartItemRepository.GetQueryable()
+            .FirstOrDefaultAsync(i => i.CartId == cart.Id && i.ProductId == request.ProductId, cancellationToken);
+
+        if (item != null)
+        {
+            if (request.Quantity <= 0)
+            {
+                await _cartItemRepository.DeleteAsync(item);
+            }
+            else
+            {
+                item.Quantity = request.Quantity;
+                await _cartItemRepository.UpdateAsync(item);
+            }
+        }
+
+        return Unit.Value;
+    }
+}
