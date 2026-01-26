@@ -34,7 +34,9 @@ public class DatabaseSeeder
     {
         try
         {
-            await _context.Database.MigrateAsync();
+            // Auto-create database tables if they don't exist (works for both SQL Server & Postgres)
+            // Note: This bypasses Migrations. For Production with strict schema changes, use Migrations.
+            await _context.Database.EnsureCreatedAsync();
 
             await SeedRolesAsync();
             var adminUser = await SeedAdminUserAsync();
