@@ -28,16 +28,22 @@ public class DatabaseSeeder
     }
 
     /// <summary>
-    /// Run all database migrations and seed default data.
+    /// Ensure the database schema matches the model (Create tables).
+    /// </summary>
+    public async Task EnsureCreatedAsync()
+    {
+        // Auto-create database tables if they don't exist (works for both SQL Server & Postgres)
+        // Note: This bypasses Migrations. For Production with strict schema changes, use Migrations.
+        await _context.Database.EnsureCreatedAsync();
+    }
+
+    /// <summary>
+    /// Seed default data.
     /// </summary>
     public async Task SeedAsync()
     {
         try
         {
-            // Auto-create database tables if they don't exist (works for both SQL Server & Postgres)
-            // Note: This bypasses Migrations. For Production with strict schema changes, use Migrations.
-            await _context.Database.EnsureCreatedAsync();
-
             await SeedRolesAsync();
             var adminUser = await SeedAdminUserAsync();
             await SeedProductCategoriesAndProductsAsync();
@@ -232,6 +238,16 @@ public class DatabaseSeeder
 /// </summary>
 public static class DatabaseSeederExtensions
 {
+    /// <summary>
+    /// Initialize the database schema (Create Tables).
+    /// </summary>
+    public static async Task InitializeDatabaseAsync(this WebApplication app)
+    {
+        using var scope = app.Services.CreateScope();
+        var seeder = ActivatorUtilities.CreateInstance<DatabaseSeeder>(scope.ServiceProvider);
+        await seeder.EnsureCreatedAsync();
+    }
+
     /// <summary>
     /// Seed the database with default data.
     /// </summary>

@@ -67,8 +67,11 @@ app.MapHub<BlogApi.Infrastructure.Hubs.ChatHub>("/hubs/chat");
 app.MapHub<BlogApi.Infrastructure.Hubs.NotificationHub>("/hubs/notifications");
 
 // ========== Database Seeding ==========
-// ========== Database Seeding ==========
-// Use SEED_DATA=true to force seeding in Production
+// ========== Database Initialization & Seeding ==========
+// 1. Create Tables (Always run to ensure DB exists)
+await app.InitializeDatabaseAsync();
+
+// 2. Seed Data (Optional in Prod to save RAM)
 if (app.Environment.IsDevelopment() || Environment.GetEnvironmentVariable("SEED_DATA") == "true")
 {
     await app.SeedDatabaseAsync();
