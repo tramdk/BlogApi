@@ -41,26 +41,32 @@ public static class ServiceCollectionExtensions
                     throw new InvalidOperationException("CRITICAL CONFIG ERROR: DatabaseProvider is 'PostgreSQL' but ConnectionString looks like SQL Server. " +
                         "Did you forget to set the Environment Variable 'ConnectionStrings__DefaultConnection' on Render? (Note the DOUBLE underscore).");
                 }
-                // Auto-fix Render/Cloud URI format (postgres://user:pass@host:port/db)
-                if (connectionString.StartsWith("postgres://"))
+                // Auto-fix Render/Cloud URI format
+                if (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://"))
                 {
                     try 
                     {
+                        Console.WriteLine($"[Config] Check: Detected Postgres URI format. Attempting conversion...");
                         var uri = new Uri(connectionString);
                         var userInfo = uri.UserInfo.Split(':');
                         var builder = new Npgsql.NpgsqlConnectionStringBuilder
                         {
                             Host = uri.Host,
-                            Port = uri.Port,
+                            Port = uri.Port > 0 ? uri.Port : 5432,
                             Database = uri.AbsolutePath.Trim('/'),
-                            Username = userInfo[0],
-                            Password = userInfo[1],
+                            Username = userInfo.Length > 0 ? userInfo[0] : string.Empty,
+                            Password = userInfo.Length > 1 ? userInfo[1] : string.Empty,
                             SslMode = Npgsql.SslMode.Require,
                             TrustServerCertificate = true
                         };
                         connectionString = builder.ToString();
+                        Console.WriteLine($"[Config] Success: Converted URI to Npgsql format (Host={builder.Host}, DB={builder.Database})");
                     }
-                    catch { /* Fallback to original string if parse fails */ }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Config] Error: Failed to parse Postgres URI. Details: {ex.Message}");
+                        // Fallback matches original behavior, will likely fail in Npgsql but errors are logged now.
+                    }
                 }
 
                 options.UseNpgsql(connectionString);
