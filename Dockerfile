@@ -21,8 +21,14 @@ WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
 
+# Copy artifacts first so we can fix permissions on them
+COPY --from=build /app/publish .
+
+# Create uploads folder and fix permissions so 'app' user can write
+# This prevents UnauthorizedAccessException (403) when uploading files
+RUN mkdir -p uploads && chown -R app:app /app
+
 # Security: Run as non-root user 'app' (built-in)
 USER app
 
-COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "BlogApi.dll"]
