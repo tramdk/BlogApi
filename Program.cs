@@ -67,7 +67,12 @@ app.MapHub<BlogApi.Infrastructure.Hubs.ChatHub>("/hubs/chat");
 app.MapHub<BlogApi.Infrastructure.Hubs.NotificationHub>("/hubs/notifications");
 
 // ========== Database Seeding ==========
-await app.SeedDatabaseAsync();
+// ========== Database Seeding ==========
+// Use SEED_DATA=true to force seeding in Production
+if (app.Environment.IsDevelopment() || Environment.GetEnvironmentVariable("SEED_DATA") == "true")
+{
+    await app.SeedDatabaseAsync();
+}
 
 app.Run();
 
