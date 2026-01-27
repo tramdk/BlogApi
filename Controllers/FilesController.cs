@@ -77,17 +77,26 @@ public class FilesController : ControllerBase
 
     [AllowAnonymous]
     [HttpGet("view/{id}")]
-    public async Task<IActionResult> ViewFile(Guid id)
+    public async Task<IActionResult> ViewFile(string id)
     {
+        if (!Guid.TryParse(id, out var guidId))
+        {
+             return NotFound(); // Prevent ORB: No JSON body
+        }
+
         try
         {
-            var (bytes, contentType, _) = await _fileService.DownloadFileAsync(id);
+            var (bytes, contentType, _) = await _fileService.DownloadFileAsync(guidId);
             return File(bytes, contentType);
         }
-        catch (FileNotFoundException ex)
+        catch (FileNotFoundException)
         {
-            Log.Warning(ex, "File not found: {Id}", id);
-            return NotFound(new { message = ex.Message });
+            // Log.Warning(ex, "File not found: {Id}", id);
+            return NotFound(); // Prevent ORB: No JSON body
+        }
+        catch(Exception)
+        {
+            return NotFound(); // fallback
         }
     }
 
@@ -100,15 +109,15 @@ public class FilesController : ControllerBase
             var (bytes, contentType, _) = await _fileService.DownloadFileByObjectIdAsync(objectId);
             return File(bytes, contentType);
         }
-        catch (FileNotFoundException ex)
+        catch (FileNotFoundException)
         {
-            Log.Warning(ex, "File by objectId not found: {ObjectId}", objectId);
-            return NotFound(new { message = ex.Message });
+            // Log.Warning(ex, "File by objectId not found: {ObjectId}", objectId);
+            return NotFound(); // Prevent ORB: No JSON body
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Error viewing file by objectId: {ObjectId}", objectId);
-            return StatusCode(500, new { message = "An internal error occurred" });
+            return NotFound(); // Prevent ORB: No JSON body
         }
     }
 
