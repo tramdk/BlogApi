@@ -241,6 +241,9 @@ public static class DatabaseSeederExtensions
     /// <summary>
     /// Initialize the database schema (Create Tables).
     /// </summary>
+    /// <summary>
+    /// Initialize the database schema (Create Tables).
+    /// </summary>
     public static async Task InitializeDatabaseAsync(this WebApplication app)
     {
         try 
@@ -249,8 +252,22 @@ public static class DatabaseSeederExtensions
             var seeder = ActivatorUtilities.CreateInstance<DatabaseSeeder>(scope.ServiceProvider);
             await seeder.EnsureCreatedAsync();
         }
+        catch (Npgsql.PostgresException ex) when (ex.SqlState == "42P07")
+        {
+            // Error 42P07: relation already exists
+            // This happens when tables exist but EF Migration History is missing.
+            // We swallow this error to verify if the app can still run with existing schema.
+            Log.Warning("Database tables already exist. Skipping Migration. (Error 42P07)");
+        }
         catch (Exception ex)
         {
+            // Check if inner exception is the Postgres one
+            if (ex.InnerException is Npgsql.PostgresException pgEx && pgEx.SqlState == "42P07")
+            {
+                Log.Warning("Database tables already exist. Skipping Migration. (Error 42P07)");
+                return;
+            }
+            
             Log.Fatal(ex, "CRITICAL ERROR: Failed to initialize/migrate database.");
             throw;
         }
