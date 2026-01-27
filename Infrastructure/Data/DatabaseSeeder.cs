@@ -32,9 +32,9 @@ public class DatabaseSeeder
     /// </summary>
     public async Task EnsureCreatedAsync()
     {
-        // Auto-create database tables if they don't exist (works for both SQL Server & Postgres)
-        // Note: This bypasses Migrations. For Production with strict schema changes, use Migrations.
-        await _context.Database.EnsureCreatedAsync();
+        // Apply migrations to ensure database schema is up to date
+        // This is preferred over EnsureCreatedAsync as it supports schema evolution
+        await _context.Database.MigrateAsync();
     }
 
     /// <summary>
