@@ -22,6 +22,7 @@ public class PostQueryService : IPostQueryService
         using var connection = _context.Database.GetDbConnection();
         
         var isSqlServer = _context.Database.IsSqlServer();
+        var isPostgres = _context.Database.ProviderName?.Contains("PostgreSQL") ?? false;
         
         string sql;
         if (isSqlServer)
@@ -39,7 +40,24 @@ public class PostQueryService : IPostQueryService
                 WHERE (@Cursor IS NULL OR p.Id < @Cursor)
                 ORDER BY p.Id DESC";
         }
-        else // SQLite for testing
+        else if (isPostgres)
+        {
+            // PostgreSQL requires quoted identifiers for PascalCase tables/columns created by EF Core
+            sql = @"
+                SELECT 
+                    p.""Id"", 
+                    p.""Title"", 
+                    u.""FullName"" as ""AuthorName"", 
+                    p.""AverageRating"", 
+                    p.""CreatedAt"",
+                    p.""CategoryId""
+                FROM ""Posts"" p
+                INNER JOIN ""AspNetUsers"" u ON p.""AuthorId"" = u.""Id""
+                WHERE (@Cursor IS NULL OR p.""Id"" < @Cursor)
+                ORDER BY p.""Id"" DESC
+                LIMIT @PageSizePlusOne";
+        }
+        else // SQLite or others
         {
             sql = @"
                 SELECT 
