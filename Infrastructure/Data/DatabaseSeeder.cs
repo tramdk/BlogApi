@@ -77,7 +77,7 @@ public class DatabaseSeeder
         {
             adminUser = new AppUser
             {
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                 UserName = adminEmail,
                 Email = adminEmail,
                 FullName = "System Admin",
@@ -104,7 +104,7 @@ public class DatabaseSeeder
 
         var techCategory = new ProductCategory
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
             Name = "Technology",
             Description = "Electronic gadgets and devices",
             CreatedAt = DateTime.UtcNow
@@ -112,7 +112,7 @@ public class DatabaseSeeder
 
         var audioCategory = new ProductCategory
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
             Name = "Audio",
             Description = "Headphones, speakers and more",
             CreatedAt = DateTime.UtcNow
@@ -127,7 +127,7 @@ public class DatabaseSeeder
             {
                 new Product
                 {
-                    Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                    Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                     Name = "Smartphone X",
                     Description = "Latest model with stunning display",
                     Price = 999.99m,
@@ -137,7 +137,7 @@ public class DatabaseSeeder
                 },
                 new Product
                 {
-                    Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                    Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                     Name = "Laptop Pro 16",
                     Description = "Powerful machine for creative professionals",
                     Price = 2499.99m,
@@ -147,7 +147,7 @@ public class DatabaseSeeder
                 },
                 new Product
                 {
-                    Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                    Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                     Name = "Wireless Buds",
                     Description = "Crystal clear sound with noise cancellation",
                     Price = 159.50m,
@@ -166,7 +166,7 @@ public class DatabaseSeeder
         {
             new Product
             {
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                 Name = "Smartphone X",
                 Description = "Latest model with stunning display",
                 Price = 999.99m,
@@ -175,7 +175,7 @@ public class DatabaseSeeder
             },
             new Product
             {
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                 Name = "Laptop Pro 16",
                 Description = "Powerful machine for creative professionals",
                 Price = 2499.99m,
@@ -184,7 +184,7 @@ public class DatabaseSeeder
             },
             new Product
             {
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                 Name = "Wireless Buds",
                 Description = "Crystal clear sound with noise cancellation",
                 Price = 159.50m,
@@ -203,7 +203,7 @@ public class DatabaseSeeder
         {
             new Post
             {
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                 Title = "Refactoring to UUID v7",
                 Content = "The move to UUID v7 has significantly improved our database sortability while maintaining uniqueness.",
                 AuthorId = adminUser.Id,
@@ -212,7 +212,7 @@ public class DatabaseSeeder
             },
             new Post
             {
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                 Title = "Clean Architecture with .NET 8",
                 Content = "Modern web APIs benefit greatly from a decoupled, maintenance-friendly architecture.",
                 AuthorId = adminUser.Id,
@@ -221,7 +221,7 @@ public class DatabaseSeeder
             },
             new Post
             {
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
                 Title = "Real-time Notifications with SignalR",
                 Content = "Keep your users engaged with instant updates delivered straight to their devices.",
                 AuthorId = adminUser.Id,
@@ -243,9 +243,17 @@ public static class DatabaseSeederExtensions
     /// </summary>
     public static async Task InitializeDatabaseAsync(this WebApplication app)
     {
-        using var scope = app.Services.CreateScope();
-        var seeder = ActivatorUtilities.CreateInstance<DatabaseSeeder>(scope.ServiceProvider);
-        await seeder.EnsureCreatedAsync();
+        try 
+        {
+            using var scope = app.Services.CreateScope();
+            var seeder = ActivatorUtilities.CreateInstance<DatabaseSeeder>(scope.ServiceProvider);
+            await seeder.EnsureCreatedAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "CRITICAL ERROR: Failed to initialize/migrate database.");
+            throw;
+        }
     }
 
     /// <summary>
@@ -253,8 +261,15 @@ public static class DatabaseSeederExtensions
     /// </summary>
     public static async Task SeedDatabaseAsync(this WebApplication app)
     {
-        using var scope = app.Services.CreateScope();
-        var seeder = ActivatorUtilities.CreateInstance<DatabaseSeeder>(scope.ServiceProvider);
-        await seeder.SeedAsync();
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var seeder = ActivatorUtilities.CreateInstance<DatabaseSeeder>(scope.ServiceProvider);
+            await seeder.SeedAsync();
+        }
+        catch (Exception ex)
+        {
+             Log.Error(ex, "ERROR: Failed to seed database.");
+        }
     }
 }
