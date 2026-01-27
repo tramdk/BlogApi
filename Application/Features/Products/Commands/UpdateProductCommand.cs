@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace BlogApi.Application.Features.Products.Commands;
 
-public record UpdateProductCommand(Guid Id, string Name, string Description, decimal Price, int Stock, string ImageUrl, Guid? CategoryId) : IRequest<Unit>;
+public record UpdateProductCommand(Guid Id, string Name, string Description, decimal Price, int Stock, string? ImageUrl, Guid? CategoryId) : IRequest<Unit>;
 
 public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand, Unit>
 {

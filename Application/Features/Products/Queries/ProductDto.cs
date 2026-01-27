@@ -10,7 +10,7 @@ public record ProductDto
     public string Description { get; init; } = string.Empty;
     public decimal Price { get; init; }
     public int Stock { get; init; }
-    public string ImageUrl { get; init; } = string.Empty;
+    public string? ImageUrl { get; init; }
     public double AverageRating { get; init; }
     public Guid? CategoryId { get; init; }
     public string? CategoryName { get; init; }
