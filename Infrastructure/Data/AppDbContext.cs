@@ -42,6 +42,7 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
         );
 
         builder.Entity<Product>().Property(p => p.Price).HasColumnType("decimal(18,2)");
+        builder.Entity<Product>().Property(p => p.ImageUrl).IsRequired(false);
         
         builder.Entity<Product>()
             .HasOne(p => p.Category)
