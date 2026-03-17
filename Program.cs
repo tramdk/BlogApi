@@ -72,8 +72,11 @@ app.MapHub<BlogApi.Infrastructure.Hubs.NotificationHub>("/hubs/notifications");
 
 // ========== Database Seeding ==========
 // ========== Database Initialization & Seeding ==========
-// 1. Create Tables (Always run to ensure DB exists)
-await app.InitializeDatabaseAsync();
+// 1. Create Tables (Always run to ensure DB exists, except in Integration Tests)
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    await app.InitializeDatabaseAsync();
+}
 
 // 2. Seed Data (Optional in Prod to save RAM)
 if (app.Environment.IsDevelopment() || Environment.GetEnvironmentVariable("SEED_DATA") == "true")

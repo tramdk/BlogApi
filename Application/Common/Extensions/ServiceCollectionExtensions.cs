@@ -131,7 +131,9 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
     {
         var redisConnectionString = configuration.GetConnectionString(ConfigurationKeys.Redis);
-        if (string.IsNullOrEmpty(redisConnectionString))
+        var skipRedis = Environment.GetEnvironmentVariable("SKIP_REDIS") == "true";
+
+        if (string.IsNullOrEmpty(redisConnectionString) || skipRedis)
         {
             services.AddDistributedMemoryCache();
         }
@@ -155,7 +157,9 @@ public static class ServiceCollectionExtensions
         services.Configure<IpRateLimitOptions>(configuration.GetSection(ConfigurationKeys.IpRateLimiting));
 
         var redisConnectionString = configuration.GetConnectionString(ConfigurationKeys.Redis);
-        if (!string.IsNullOrEmpty(redisConnectionString))
+        var skipRedis = Environment.GetEnvironmentVariable("SKIP_REDIS") == "true";
+
+        if (!string.IsNullOrEmpty(redisConnectionString) && !skipRedis)
         {
             // Use Distributed Cache (Redis) for Rate Limiting if available
             services.AddDistributedRateLimiting();

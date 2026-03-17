@@ -20,6 +20,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
 
+        // Ensure we don't try to connect to a real Redis server during tests
+        Environment.SetEnvironmentVariable("SKIP_REDIS", "true");
+        // Ensure roles and initial data are seeded for integration tests
+        Environment.SetEnvironmentVariable("SEED_DATA", "true");
+
         builder.UseEnvironment("Testing");
         
         // Configure test configuration (e.g., upload folder)

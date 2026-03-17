@@ -102,23 +102,23 @@ public class DatabaseSeeder
             return;
         }
 
-        var techCategory = new ProductCategory
+        var bouquetCategory = new ProductCategory
         {
             Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-            Name = "Technology",
-            Description = "Electronic gadgets and devices",
+            Name = "Hoa Bó",
+            Description = "Các mẫu hoa bó nghệ thuật, sang trọng",
             CreatedAt = DateTime.UtcNow
         };
 
-        var audioCategory = new ProductCategory
+        var basketCategory = new ProductCategory
         {
             Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-            Name = "Audio",
-            Description = "Headphones, speakers and more",
+            Name = "Hoa Giỏ",
+            Description = "Giỏ hoa trang trí, quà tặng tinh tế",
             CreatedAt = DateTime.UtcNow
         };
 
-        _context.ProductCategories.AddRange(techCategory, audioCategory);
+        _context.ProductCategories.AddRange(bouquetCategory, basketCategory);
         await _context.SaveChangesAsync();
 
         if (!_context.Products.Any())
@@ -128,32 +128,32 @@ public class DatabaseSeeder
                 new Product
                 {
                     Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-                    Name = "Smartphone X",
-                    Description = "Latest model with stunning display",
-                    Price = 999.99m,
-                    Stock = 50,
+                    Name = "Bó Hoa Hồng Red Naomi",
+                    Description = "Sự kết hợp hoàn hảo giữa hoa hồng đỏ và lá phụ đi kèm",
+                    Price = 450000m,
+                    Stock = 10,
                     CreatedAt = DateTime.UtcNow,
-                    CategoryId = techCategory.Id
+                    CategoryId = bouquetCategory.Id
                 },
                 new Product
                 {
                     Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-                    Name = "Laptop Pro 16",
-                    Description = "Powerful machine for creative professionals",
-                    Price = 2499.99m,
-                    Stock = 15,
+                    Name = "Giỏ Hoa Hướng Dương Nắng Mai",
+                    Description = "Mang lại năng lượng tích cực và niềm vui cho ngày mới",
+                    Price = 550000m,
+                    Stock = 5,
                     CreatedAt = DateTime.UtcNow,
-                    CategoryId = techCategory.Id
+                    CategoryId = basketCategory.Id
                 },
                 new Product
                 {
                     Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-                    Name = "Wireless Buds",
-                    Description = "Crystal clear sound with noise cancellation",
-                    Price = 159.50m,
-                    Stock = 100,
+                    Name = "Bó Hoa Cúc Tự Nhiên",
+                    Description = "Vẻ đẹp đơn giản nhưng không kém phần thanh lịch",
+                    Price = 250000m,
+                    Stock = 20,
                     CreatedAt = DateTime.UtcNow,
-                    CategoryId = audioCategory.Id
+                    CategoryId = bouquetCategory.Id
                 }
             });
             await _context.SaveChangesAsync();
@@ -167,28 +167,10 @@ public class DatabaseSeeder
             new Product
             {
                 Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-                Name = "Smartphone X",
-                Description = "Latest model with stunning display",
-                Price = 999.99m,
-                Stock = 50,
-                CreatedAt = DateTime.UtcNow
-            },
-            new Product
-            {
-                Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-                Name = "Laptop Pro 16",
-                Description = "Powerful machine for creative professionals",
-                Price = 2499.99m,
-                Stock = 15,
-                CreatedAt = DateTime.UtcNow
-            },
-            new Product
-            {
-                Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-                Name = "Wireless Buds",
-                Description = "Crystal clear sound with noise cancellation",
-                Price = 159.50m,
-                Stock = 100,
+                Name = "Hoa Hồng Đà Lạt (Bó mẫu)",
+                Description = "Sản phẩm thử nghiệm không thuộc danh mục",
+                Price = 300000m,
+                Stock = 10,
                 CreatedAt = DateTime.UtcNow
             }
         });
@@ -204,29 +186,29 @@ public class DatabaseSeeder
             new Post
             {
                 Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-                Title = "Refactoring to UUID v7",
-                Content = "The move to UUID v7 has significantly improved our database sortability while maintaining uniqueness.",
+                Title = "Cách giữ hoa tươi lâu tại nhà",
+                Content = "Để hoa tươi lâu, bạn cần thay nước mỗi ngày và cắt gốc hoa theo chiều chéo để hút nước tốt hơn...",
                 AuthorId = adminUser.Id,
                 CreatedAt = DateTime.UtcNow,
-                CategoryId = "blog"
+                CategoryId = "flower-care"
             },
             new Post
             {
                 Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-                Title = "Clean Architecture with .NET 8",
-                Content = "Modern web APIs benefit greatly from a decoupled, maintenance-friendly architecture.",
+                Title = "Ý nghĩa của các loài hoa trong tình yêu",
+                Content = "Hoa hồng đỏ tượng trưng cho tình yêu nồng cháy, trong khi hoa baby trắng lại mang ý nghĩa tình yêu tinh khôi...",
                 AuthorId = adminUser.Id,
                 CreatedAt = DateTime.UtcNow,
-                CategoryId = "blog"
+                CategoryId = "flower-meaning"
             },
             new Post
             {
                 Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
-                Title = "Real-time Notifications with SignalR",
-                Content = "Keep your users engaged with instant updates delivered straight to their devices.",
+                Title = "Xu hướng chọn hoa cưới năm 2026",
+                Content = "Năm 2026, các tone màu vintage và sự tối giản trong thiết kế hoa cầm tay cô dâu sẽ lên ngôi...",
                 AuthorId = adminUser.Id,
                 CreatedAt = DateTime.UtcNow,
-                CategoryId = "blog"
+                CategoryId = "wedding-trends"
             }
         });
         await _context.SaveChangesAsync();
@@ -259,12 +241,24 @@ public static class DatabaseSeederExtensions
             // We swallow this error to verify if the app can still run with existing schema.
             Log.Warning("Database tables already exist. Skipping Migration. (Error 42P07)");
         }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("already exists"))
+        {
+            // SQLite Error 1: table already exists
+            Log.Warning("SQLite database tables already exist. Skipping Migration.");
+        }
         catch (Exception ex)
         {
             // Check if inner exception is the Postgres one
             if (ex.InnerException is Npgsql.PostgresException pgEx && pgEx.SqlState == "42P07")
             {
                 Log.Warning("Database tables already exist. Skipping Migration. (Error 42P07)");
+                return;
+            }
+
+            // Check if inner exception is the SQLite one
+            if (ex.InnerException is Microsoft.Data.Sqlite.SqliteException slEx && slEx.SqliteErrorCode == 1 && slEx.Message.Contains("already exists"))
+            {
+                Log.Warning("SQLite database tables already exist. Skipping Migration.");
                 return;
             }
             
