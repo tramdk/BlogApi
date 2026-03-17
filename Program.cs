@@ -21,7 +21,7 @@ builder.Host.UseSerilog();
 // ========== Configure Services ==========
 builder.Services
     .AddDatabaseServices(builder.Configuration)
-    .AddDistributedMemoryCache()
+    .AddRedisCache(builder.Configuration)
     .AddRateLimiting(builder.Configuration)
     .AddJwtAuthentication(builder.Configuration)
     .AddSignalRServices()

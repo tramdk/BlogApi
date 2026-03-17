@@ -1,5 +1,6 @@
 using System.Text;
 using AspNetCoreRateLimit;
+using AspNetCoreRateLimit.Redis;
 using BlogApi.Application.Common.Behaviors;
 using BlogApi.Application.Common.Interfaces;
 using BlogApi.Application.Common.Services;
@@ -125,13 +126,45 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Add Redis Cache services.
+    /// </summary>
+    public static IServiceCollection AddRedisCache(this IServiceCollection services, IConfiguration configuration)
+    {
+        var redisConnectionString = configuration.GetConnectionString(ConfigurationKeys.Redis);
+        if (string.IsNullOrEmpty(redisConnectionString))
+        {
+            services.AddDistributedMemoryCache();
+        }
+        else
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+                options.InstanceName = "BlogApi_";
+            });
+        }
+        return services;
+    }
+
+    /// <summary>
     /// Add Rate Limiting services.
     /// </summary>
     public static IServiceCollection AddRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddMemoryCache();
         services.Configure<IpRateLimitOptions>(configuration.GetSection(ConfigurationKeys.IpRateLimiting));
-        services.AddInMemoryRateLimiting();
+
+        var redisConnectionString = configuration.GetConnectionString(ConfigurationKeys.Redis);
+        if (!string.IsNullOrEmpty(redisConnectionString))
+        {
+            // Use Distributed Cache (Redis) for Rate Limiting if available
+            services.AddDistributedRateLimiting();
+        }
+        else
+        {
+            services.AddInMemoryRateLimiting();
+        }
+
         services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
         return services;
     }
