@@ -1,44 +1,46 @@
-﻿using BlogApi.Application.Features.Products.Queries;
+using BlogApi.Application.Features.Products.Queries;
 using BlogApi.Domain.Entities;
 using BlogApi.Application.Common.Interfaces;
 using MediatR;
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace BlogApi.Application.Features.Products.Queries;
 
-public record GetProductsQuery : IRequest<IEnumerable<ProductDto>>;
+public record GetProductsQuery(int PageNumber = 1, int PageSize = 10, string? SearchTerm = null) : IRequest<PagedResult<ProductDto>>;
 
-public class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, IEnumerable<ProductDto>>
+public class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, PagedResult<ProductDto>>
 {
     private readonly IGenericRepository<Product, Guid> _productRepository;
+    private readonly IMapper _mapper;
 
-    public GetProductsQueryHandler(IGenericRepository<Product, Guid> productRepository)
+    public GetProductsQueryHandler(IGenericRepository<Product, Guid> productRepository, IMapper mapper)
     {
         _productRepository = productRepository;
+        _mapper = mapper;
     }
 
-    public async Task<IEnumerable<ProductDto>> Handle(GetProductsQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<ProductDto>> Handle(GetProductsQuery request, CancellationToken cancellationToken)
     {
-        var products = await _productRepository.GetQueryable()
-            .Include(p => p.Category)
+        var optionsBuilder = new QueryOptionsBuilder<Product>()
+            .WithPagination((request.PageNumber - 1) * request.PageSize, request.PageSize)
+            .AsNoTracking();
+
+        if (!string.IsNullOrEmpty(request.SearchTerm))
+        {
+            var searchTerm = request.SearchTerm.ToLower();
+            optionsBuilder.WithFilter(p => p.Name.ToLower().Contains(searchTerm) || p.Description.ToLower().Contains(searchTerm));
+        }
+
+        var queryOptions = optionsBuilder.Build();
+        
+        var count = await _productRepository.CountAsync(queryOptions.Filter);
+        
+        var items = await _productRepository.GetQueryable(queryOptions)
+            .ProjectTo<ProductDto>(_mapper.ConfigurationProvider)
             .ToListAsync(cancellationToken);
 
-        return products.Select(p => new ProductDto
-        {
-            Id = p.Id,
-            Name = p.Name,
-            Description = p.Description,
-            Price = p.Price,
-            Stock = p.Stock,
-            ImageUrl = p.ImageUrl,
-            AverageRating = p.AverageRating,
-            CategoryId = p.CategoryId,
-            CategoryName = p.Category?.Name
-        });
+        return new PagedResult<ProductDto>(items, count, request.PageNumber, request.PageSize);
     }
 }

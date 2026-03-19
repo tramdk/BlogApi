@@ -21,6 +21,17 @@ public class MappingProfile : Profile
             
         CreateMap<Post, PostDto>()
             .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src => src.Author != null ? src.Author.FullName : null));
+
+        // Products
+        CreateMap<Product, ProductDto>()
+            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : null));
+        
+        CreateMap<Review, ReviewDto>()
+            .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.User != null ? src.User.FullName : "Anonymous"));
+
+        // Users
+        CreateMap<ApplicationUser, UserDto>()
+            .ForMember(dest => dest.Roles, opt => opt.Ignore()); // Roles handled manually in handler usually
     }
 }
 

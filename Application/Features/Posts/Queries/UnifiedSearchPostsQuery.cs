@@ -3,8 +3,12 @@ using BlogApi.Application.Common.Helpers;
 using BlogApi.Application.Common.Interfaces;
 using BlogApi.Application.Common.Models;
 using BlogApi.Application.Features.Posts.DTOs;
+using BlogApi.Application.Features.Posts.Extensions;
 using BlogApi.Domain.Entities;
 using MediatR;
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
 namespace BlogApi.Application.Features.Posts.Queries;
@@ -22,10 +26,12 @@ public class UnifiedSearchPostsHandler
     : IRequestHandler<UnifiedSearchPostsQuery, PagedResult<PostDto>>
 {
     private readonly IGenericRepository<Post, Guid> _repository;
-    
-    public UnifiedSearchPostsHandler(IGenericRepository<Post, Guid> repository)
+    private readonly IMapper _mapper;
+
+    public UnifiedSearchPostsHandler(IGenericRepository<Post, Guid> repository, IMapper mapper)
     {
         _repository = repository;
+        _mapper = mapper;
     }
     
     public async Task<PagedResult<PostDto>> Handle(
@@ -37,7 +43,7 @@ public class UnifiedSearchPostsHandler
         // Build filter expression
         Expression<Func<Post, bool>>? filter = null;
         
-        if (searchRequest.IsFilterModelRequest)
+        if (searchRequest.IsFilterModelRequest())
         {
             // Use FilterModel approach
             var filterModel = new FilterModel
@@ -50,7 +56,7 @@ public class UnifiedSearchPostsHandler
             
             filter = FilterModelParser.ParseFilter<Post>(filterModel);
         }
-        else if (searchRequest.IsSimpleSearchRequest)
+        else if (searchRequest.IsSimpleSearchRequest())
         {
             // Use simple search approach
             filter = BuildSimpleFilter(searchRequest);
@@ -76,19 +82,15 @@ public class UnifiedSearchPostsHandler
         
         var queryOptions = optionsBuilder.Build();
         
-        // Execute query
-        var pagedResult = await _repository.GetPagedAsync(queryOptions);
+        // Build query and project to DTO using AutoMapper
+        var query = _repository.GetQueryable(queryOptions);
         
-        // Map to DTOs
+        var items = await query
+            .ProjectTo<PostDto>(_mapper.ConfigurationProvider)
+            .ToListAsync(ct);
+            
         return new PagedResult<PostDto>(
-            pagedResult.Items.Select(p => new PostDto(
-                p.Id,
-                p.Title,
-                p.Author?.FullName ?? "Unknown",
-                p.AverageRating,
-                p.CreatedAt,
-                p.CategoryId
-            )).ToList(),
+            items,
             pagedResult.TotalCount,
             pagedResult.PageNumber,
             pagedResult.PageSize
