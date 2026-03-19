@@ -57,7 +57,7 @@ public class UsersControllerTests : BaseIntegrationTest
 
         // Assert
         response.EnsureSuccessStatusCode();
-        var result = await response.Content.ReadFromJsonAsync<PaginatedList<UserDto>>();
+        var result = await response.Content.ReadFromJsonAsync<PagedResult<UserDto>>();
         Assert.NotNull(result);
         Assert.NotEmpty(result.Items);
     }

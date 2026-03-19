@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace BlogApi.Application.Features.Users.Queries;
 
 [Cacheable(ExpirationMinutes = 2)]
-public record GetUsersQuery(int PageNumber = 1, int PageSize = 10) : IRequest<PaginatedList<UserDto>>;
+public record GetUsersQuery(int PageNumber = 1, int PageSize = 10) : IRequest<PagedResult<UserDto>>;
 
-public class GetUsersHandler : IRequestHandler<GetUsersQuery, PaginatedList<UserDto>>
+public class GetUsersHandler : IRequestHandler<GetUsersQuery, PagedResult<UserDto>>
 {
     private readonly UserManager<AppUser> _userManager;
 
@@ -19,7 +19,7 @@ public class GetUsersHandler : IRequestHandler<GetUsersQuery, PaginatedList<User
         _userManager = userManager;
     }
 
-    public async Task<PaginatedList<UserDto>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<UserDto>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
     {
         var query = _userManager.Users.AsNoTracking();
         
@@ -43,6 +43,6 @@ public class GetUsersHandler : IRequestHandler<GetUsersQuery, PaginatedList<User
             });
         }
 
-        return new PaginatedList<UserDto>(items, count, request.PageNumber, request.PageSize);
+        return new PagedResult<UserDto>(items, count, request.PageNumber, request.PageSize);
     }
 }

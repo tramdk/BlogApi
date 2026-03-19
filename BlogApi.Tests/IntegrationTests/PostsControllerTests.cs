@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using BlogApi.Application.Features.Posts.Commands;
 using BlogApi.Application.Features.Posts.DTOs;
+using BlogApi.Application.Common.Models;
 using BlogApi.Application.Features.Auth.Commands;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -123,5 +124,41 @@ public class PostsControllerTests : BaseIntegrationTest
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, deleteResp.StatusCode);
+    }
+
+    [Fact]
+    public async Task SearchPosts_ReturnsPagedResult()
+    {
+        // Act
+        var response = await _client.GetAsync("/api/posts/search?searchTerm=test");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<PagedResult<PostDto>>();
+        Assert.NotNull(result);
+        Assert.NotNull(result.Items);
+    }
+
+    [Fact]
+    public async Task SearchPosts_WithFilterModel_ReturnsPagedResult()
+    {
+        // Arrange
+        var request = new 
+        {
+            Filters = new Dictionary<string, object>
+            {
+                { "title", new { filterType = "text", type = "contains", filter = "test" } }
+            },
+            Page = 0,
+            PageSize = 10
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/posts/search", request);
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<PagedResult<PostDto>>();
+        Assert.NotNull(result);
     }
 }

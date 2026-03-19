@@ -312,7 +312,7 @@ Application/
 │   │   ├── LoggingBehavior.cs
 │   │   └── AuthorizationBehavior.cs
 │   ├── Models/              # Shared models
-│   │   ├── PaginatedList.cs
+│   │   ├── PagedResult.cs
 │   │   └── Result.cs
 │   └── Services/            # Interface definitions only
 │       ├── IJwtService.cs
