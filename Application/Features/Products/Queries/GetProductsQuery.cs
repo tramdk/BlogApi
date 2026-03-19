@@ -1,6 +1,6 @@
-using BlogApi.Application.Features.Products.Queries;
-using BlogApi.Domain.Entities;
 using BlogApi.Application.Common.Interfaces;
+using BlogApi.Application.Common.Models;
+using BlogApi.Domain.Entities;
 using MediatR;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;

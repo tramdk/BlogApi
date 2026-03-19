@@ -1,3 +1,4 @@
+using BlogApi.Application.Common.Models;
 using BlogApi.Application.Features.Products.Commands;
 using BlogApi.Application.Features.Products.Queries;
 using MediatR;
@@ -21,9 +22,9 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ProductDto>>> GetAll()
+    public async Task<ActionResult<PagedResult<ProductDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null)
     {
-        return Ok(await _mediator.Send(new GetProductsQuery()));
+        return Ok(await _mediator.Send(new GetProductsQuery(page, pageSize, search)));
     }
 
     [HttpGet("{id}")]

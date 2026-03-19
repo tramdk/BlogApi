@@ -61,6 +61,11 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
         return _dbSet.AsQueryable();
     }
 
+    public IQueryable<TEntity> GetQueryable(QueryOptions<TEntity> options)
+    {
+        return ApplyQueryOptions(_dbSet.AsQueryable(), options);
+    }
+
     // ========== Advanced Query Operations ==========
 
     public virtual async Task<IEnumerable<TEntity>> GetWithOptionsAsync(QueryOptions<TEntity> options)

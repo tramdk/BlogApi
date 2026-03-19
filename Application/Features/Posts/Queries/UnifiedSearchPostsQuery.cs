@@ -89,11 +89,13 @@ public class UnifiedSearchPostsHandler
             .ProjectTo<PostDto>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
             
+        var count = await _repository.CountAsync(queryOptions.Filter);
+
         return new PagedResult<PostDto>(
             items,
-            pagedResult.TotalCount,
-            pagedResult.PageNumber,
-            pagedResult.PageSize
+            count,
+            searchRequest.Page ?? 1,
+            searchRequest.PageSize
         );
     }
     

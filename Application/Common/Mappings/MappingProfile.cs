@@ -1,6 +1,8 @@
 using AutoMapper;
 using BlogApi.Application.Common.Models;
 using BlogApi.Application.Features.Posts.DTOs;
+using BlogApi.Application.Features.Products.Queries;
+using BlogApi.Application.Features.Users.Queries;
 using BlogApi.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 
@@ -26,11 +28,11 @@ public class MappingProfile : Profile
         CreateMap<Product, ProductDto>()
             .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.Name : null));
         
-        CreateMap<Review, ReviewDto>()
+        CreateMap<ProductReview, ReviewDto>()
             .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.User != null ? src.User.FullName : "Anonymous"));
 
         // Users
-        CreateMap<ApplicationUser, UserDto>()
+        CreateMap<AppUser, UserDto>()
             .ForMember(dest => dest.Roles, opt => opt.Ignore()); // Roles handled manually in handler usually
     }
 }

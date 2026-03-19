@@ -46,6 +46,11 @@ public interface IGenericRepository<TEntity, TKey> where TEntity : class
     /// </summary>
     IQueryable<TEntity> GetQueryable();
     
+    /// <summary>
+    /// Get queryable with advanced query options applied
+    /// </summary>
+    IQueryable<TEntity> GetQueryable(QueryOptions<TEntity> options);
+    
     // ========== Advanced Query Operations ==========
     
     /// <summary>

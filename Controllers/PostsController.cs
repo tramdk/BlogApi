@@ -31,11 +31,9 @@ public class PostsController : ControllerBase
     /// 3. POST with FilterModel: { "filters": { "title": { "filterType": "text", "type": "contains", "filter": "react" } } }
     /// </summary>
     [HttpGet("search")]
-    [HttpPost("search")]
     [HttpGet("unified")] // For backward compatibility
-    [HttpPost("unified")] // For backward compatibility
     [AllowAnonymous]
-    public async Task<IActionResult> Search(
+    public async Task<IActionResult> SearchGet(
         [FromQuery] string? searchTerm = null,
         [FromQuery] string? categoryId = null,
         [FromQuery] double? minRating = null,
@@ -44,28 +42,38 @@ public class PostsController : ControllerBase
         [FromQuery] string? sortBy = null,
         [FromQuery] bool? sortDescending = null,
         [FromQuery] int? page = null,
-        [FromQuery] int pageSize = 10,
-        [FromBody] UnifiedSearchRequest? bodyRequest = null)
+        [FromQuery] int pageSize = 10)
     {
-        // Use UnifiedSearchRequest for all search needs
-        var request = bodyRequest ?? new UnifiedSearchRequest();
-
-        // Query parameters take precedence if matching body properties are null
-        request.SearchTerm = searchTerm ?? request.SearchTerm;
-        request.CategoryId = categoryId ?? request.CategoryId;
-        request.MinRating = minRating ?? request.MinRating;
-        request.FromDate = fromDate ?? request.FromDate;
-        request.ToDate = toDate ?? request.ToDate;
-        request.SortBy = sortBy ?? request.SortBy;
-        request.SortDescending = sortDescending ?? request.SortDescending;
-        request.Page = page ?? request.Page;
-        request.PageSize = pageSize > 0 ? pageSize : request.PageSize;
+        var request = new UnifiedSearchRequest
+        {
+            SearchTerm = searchTerm,
+            CategoryId = categoryId,
+            MinRating = minRating,
+            FromDate = fromDate,
+            ToDate = toDate,
+            SortBy = sortBy,
+            SortDescending = sortDescending,
+            Page = page,
+            PageSize = pageSize > 0 ? pageSize : 10
+        };
 
         var query = new UnifiedSearchPostsQuery(request);
         var result = await _mediator.Send(query);
         return Ok(result);
     }
 
+    [HttpPost("search")]
+    [HttpPost("unified")] // For backward compatibility
+    [AllowAnonymous]
+    public async Task<IActionResult> SearchPost([FromBody] UnifiedSearchRequest request)
+    {
+        if (request == null)
+            return BadRequest();
+
+        var query = new UnifiedSearchPostsQuery(request);
+        var result = await _mediator.Send(query);
+        return Ok(result);
+    }
 
     [HttpGet("{id}")]
     [AllowAnonymous]
