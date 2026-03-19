@@ -31,5 +31,7 @@ jobs:
       run: dotnet build --no-restore --configuration Release
       
     - name: Test
-      # Run integration tests to ensure quality
-      run: dotnet test --no-build --configuration Release --verbosity normal
+      run: dotnet test BlogApi.Tests/BlogApi.Tests.csproj --no-build --configuration Release --verbosity normal
+
+    - name: Docker Build Check
+      run: docker build -t blog-api-check .

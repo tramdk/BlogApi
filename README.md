@@ -177,20 +177,31 @@ The `appsettings.json` file controls the application behavior.
 
 ---
 
-## 🐳 Deployment
+## 🐳 Deployment (Docker)
 
-### Docker Build
-We use a **Multi-stage build** for optimized image size.
+We provide automated scripts to make local deployment on **Docker Desktop** seamless.
 
-```bash
-docker build -t blog-api .
-docker run -p 8080:8080 -e "ConnectionStrings__DefaultConnection=..." blog-api
+### 💨 One-Click Automatic Deployment
+The `deploy-docker.ps1` script handles everything: stopping old containers, building, starting services, and opening the API docs once ready.
+
+```powershell
+# In PowerShell (Project Root)
+.\deploy-docker.ps1
 ```
 
-### Environment Variables
-Override settings in Docker using environment variables (double underscore `__` for nesting):
-- `ConnectionStrings__DefaultConnection`
-- `Jwt__Secret`
+### 🔁 Auto-Sync Developer Mode (Watch)
+Work in real-time. Use **Docker Compose Watch** to automatically rebuild and restart the API whenever you save a code change.
+
+```powershell
+# Start with watch mode
+docker-compose up --watch
+```
+
+### 📦 Manual Build
+```bash
+docker build -t blog-api .
+docker run -p 8080:8080 blog-api
+```
 
 ---
 

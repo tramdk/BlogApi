@@ -38,6 +38,18 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./Logs:/app/Logs
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+          ignore:
+            - bin/
+            - obj/
+            - uploads/
+            - Logs/
+            - test_uploads/
+            - .git/
+            - .vs/
 
 volumes:
   postgres_data:
