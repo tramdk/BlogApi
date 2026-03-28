@@ -24,6 +24,8 @@ public static class ConfigurationKeys
     public const string JwtIssuer = "Jwt:Issuer";
     public const string JwtAudience = "Jwt:Audience";
     public const string FileStorageUploadFolder = "FileStorage:UploadFolder";
+    public const string FileStorageAllowedExtensions = "FileStorage:AllowedExtensions";
+    public const string FileStorageMaxFileSizeInBytes = "FileStorage:MaxFileSizeInBytes";
     public const string IpRateLimiting = "IpRateLimiting";
     public const string Redis = "Redis";
 }

@@ -7,7 +7,7 @@ namespace BlogApi.Application.Common.Interfaces;
 
 public interface IFileService
 {
-    Task<FileMetadata> UploadFileAsync(IFormFile file, string? objectId = null, string? objectType = null);
+    Task<FileMetadata> UploadFileAsync(IFormFile file, string? objectId = null, string? objectType = null, bool isPublic = true);
     Task<IEnumerable<FileMetadata>> GetFilesByObjectAsync(string objectId, string objectType);
     Task<List<FileMetadata>> GetFilesByObjectIdAsync(string objectId);
     Task<bool> DeleteFileAsync(Guid fileId);

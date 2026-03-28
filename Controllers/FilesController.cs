@@ -29,9 +29,9 @@ public class FilesController : ControllerBase
     }
 
     [HttpPost("upload")]
-    public async Task<ActionResult<FileResponse>> UploadFile(IFormFile file, [FromForm] string? objectId, [FromForm] string? objectType)
+    public async Task<ActionResult<FileResponse>> UploadFile(IFormFile file, [FromForm] string? objectId, [FromForm] string? objectType, [FromForm] bool isPublic = true)
     {
-        var result = await _fileService.UploadFileAsync(file, objectId, objectType);
+        var result = await _fileService.UploadFileAsync(file, objectId, objectType, isPublic);
         return Ok(_mapper.Map<FileResponse>(result));
     }
 

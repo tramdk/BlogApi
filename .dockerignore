@@ -12,3 +12,6 @@
 BlogApi.Tests/
 README.md
 docs/
+**/logs
+**/Logs
+**/*.db

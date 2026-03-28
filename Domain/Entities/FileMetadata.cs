@@ -18,4 +18,6 @@ public class FileMetadata
 
     public Guid? UploadedById { get; set; }
     public AppUser? UploadedBy { get; set; }
+
+    public bool IsPublic { get; set; } = true;
 }

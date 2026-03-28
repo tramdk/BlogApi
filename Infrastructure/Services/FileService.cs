@@ -34,17 +34,26 @@ public class FileService : IFileService
         _uploadFolder = configuration["FileStorage:UploadFolder"] ?? "uploads";
     }
 
-    public async Task<FileMetadata> UploadFileAsync(IFormFile file, string? objectId = null, string? objectType = null)
+    public async Task<FileMetadata> UploadFileAsync(IFormFile file, string? objectId = null, string? objectType = null, bool isPublic = true)
     {
         if (file == null || file.Length == 0) throw new ArgumentException("File is empty");
         if (string.IsNullOrEmpty(objectId)) throw new ArgumentException("objectId is empty");
         if (string.IsNullOrEmpty(objectType)) throw new ArgumentException("objectType is empty");
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".pdf", ".txt", ".docx" };
+        if (!allowedExtensions.Contains(extension))
+            throw new ArgumentException($"File extension {extension} is not allowed.");
+
+        if (file.Length > 10 * 1024 * 1024)
+            throw new ArgumentException("File size exceeds 10MB limit.");
+
         
 
         var uploadPath = Path.Combine(_environment.ContentRootPath, _uploadFolder);
         if (!Directory.Exists(uploadPath)) Directory.CreateDirectory(uploadPath);
 
-        var storedName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+        var storedName = $"{Guid.NewGuid()}{extension}";
         var filePath = Path.Combine(uploadPath, storedName);
 
         using (var stream = new FileStream(filePath, FileMode.Create))
@@ -63,7 +72,8 @@ public class FileService : IFileService
             UploadedAt = DateTime.UtcNow,
             ObjectId = objectId,
             ObjectType = objectType,
-            UploadedById = _currentUserService.UserId
+            UploadedById = _currentUserService.UserId,
+            IsPublic = isPublic
         };
 
         await _repository.AddAsync(metadata);
@@ -73,20 +83,24 @@ public class FileService : IFileService
 
     public async Task<IEnumerable<FileMetadata>> GetFilesByObjectAsync(string objectId, string objectType)
     {
-        return await _repository.FindAsync(f => f.ObjectId == objectId && f.ObjectType == objectType);
+        var currentUserId = _currentUserService.UserId;
+        return await _repository.FindAsync(f => f.ObjectId == objectId && f.ObjectType == objectType && (f.IsPublic || f.UploadedById == currentUserId));
     }
     
     public async Task<List<FileMetadata>> GetFilesByObjectIdAsync(string objectId)
     {
+        var currentUserId = _currentUserService.UserId;
+        var query = _repository.GetQueryable();
+
         if (Guid.TryParse(objectId, out var idAsGuid))
         {
-            return await _repository.GetQueryable()
-                .Where(f => f.ObjectId == objectId || f.Id == idAsGuid)
+            return await query
+                .Where(f => (f.ObjectId == objectId || f.Id == idAsGuid) && (f.IsPublic || f.UploadedById == currentUserId))
                 .ToListAsync();
         }
         
-        return await _repository.GetQueryable()
-            .Where(f => f.ObjectId == objectId)
+        return await query
+            .Where(f => f.ObjectId == objectId && (f.IsPublic || f.UploadedById == currentUserId))
             .ToListAsync();
     }
 
@@ -94,6 +108,10 @@ public class FileService : IFileService
     {
         var metadata = await _repository.GetByIdAsync(fileId);
         if (metadata == null) return false;
+
+        // Security Check: Only the owner can delete the file
+        if (metadata.UploadedById != _currentUserService.UserId)
+            throw new UnauthorizedAccessException("You are not authorized to delete this file.");
 
         if (File.Exists(metadata.FilePath))
         {
@@ -110,6 +128,10 @@ public class FileService : IFileService
         if (metadata == null || !File.Exists(metadata.FilePath))
             throw new FileNotFoundException("File not found");
 
+        // Security Check: Access is allowed if file is public OR current user is the owner
+        if (!metadata.IsPublic && metadata.UploadedById != _currentUserService.UserId)
+            throw new UnauthorizedAccessException("You are not authorized to access this private file.");
+
         var bytes = await File.ReadAllBytesAsync(metadata.FilePath);
         return (bytes, metadata.ContentType, metadata.FileName);
     }
@@ -125,6 +147,10 @@ public class FileService : IFileService
 
         if (!File.Exists(metadata.FilePath))
             throw new FileNotFoundException($"Physical file missing at: {metadata.FilePath}");
+
+        // Security Check: Access is allowed if file is public OR current user is the owner
+        if (!metadata.IsPublic && metadata.UploadedById != _currentUserService.UserId)
+            throw new UnauthorizedAccessException("You are not authorized to access this private file.");
 
         var bytes = await File.ReadAllBytesAsync(metadata.FilePath);
         return (bytes, metadata.ContentType, metadata.FileName);

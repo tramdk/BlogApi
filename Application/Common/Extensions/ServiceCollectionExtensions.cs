@@ -233,16 +233,34 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Add CORS policy for frontend applications.
     /// </summary>
-    public static IServiceCollection AddCorsPolicy(this IServiceCollection services, string policyName = CorsConstants.AllowFrontend)
+    public static IServiceCollection AddCorsPolicy(this IServiceCollection services, IConfiguration configuration, string policyName = CorsConstants.AllowFrontend)
     {
         services.AddCors(options =>
         {
             options.AddPolicy(policyName, policy =>
             {
-                policy.SetIsOriginAllowed(_ => true) // Allow any origin during development
-                      .AllowAnyMethod()
-                      .AllowAnyHeader()
-                      .AllowCredentials();
+                var angularUrl = configuration["AngularApp:Url"];
+                var reactUrl = configuration["ReactApp:Url"];
+                var allowedOrigins = new List<string>();
+                
+                if (!string.IsNullOrEmpty(angularUrl)) allowedOrigins.Add(angularUrl.TrimEnd('/'));
+                if (!string.IsNullOrEmpty(reactUrl)) allowedOrigins.Add(reactUrl.TrimEnd('/'));
+
+                if (allowedOrigins.Any())
+                {
+                    policy.WithOrigins(allowedOrigins.ToArray())
+                          .AllowAnyMethod()
+                          .AllowAnyHeader()
+                          .AllowCredentials();
+                }
+                else
+                {
+                    // Fallback for development if not configured
+                    policy.SetIsOriginAllowed(_ => true)
+                          .AllowAnyMethod()
+                          .AllowAnyHeader()
+                          .AllowCredentials();
+                }
             });
         });
 

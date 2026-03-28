@@ -1,18 +1,75 @@
+## [ .NET Core ]
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
 bin/
 obj/
+
+# Testing
+TestResults/
+[Cc]overage/
+*.coverage
+
+# User-specific files
+*.user
+*.userprefs
+*.suo
+*.useros
+*.sln.docstates
+
+# IDE: VS
 .vs/
 .idea/
-*.user
+*.swp
+*.bak
+*.tmp
 *.suo
-*.userprefs
-*.lock.json
-TestResults/
+*.log
+
+# IDE: VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Environment Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+appsettings.Production.json
+appsettings.local.json
+
+# Databases (SQLite & EF)
+*.db
+*.db-shm
+*.db-wal
+
+# Folders for generated files
 Logs/
 logs/
 uploads/
 test_uploads/
-[Dd]ebug/
-[Rr]elease/
+publish/
+
+# General
 *.dll
+*.exe
 *.pdb
+*.msi
 .DS_Store
+Thumbs.db
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

@@ -27,7 +27,7 @@ builder.Services
     .AddSignalRServices()
     .AddApplicationServices()
     .AddInfrastructureServices()
-    .AddCorsPolicy();
+    .AddCorsPolicy(builder.Configuration);
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => 
