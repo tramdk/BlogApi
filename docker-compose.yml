@@ -3,11 +3,11 @@ services:
     image: postgres:15-alpine
     container_name: blog-api-db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: blogs
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-blogs}
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -15,7 +15,7 @@ services:
     image: redis:alpine
     container_name: blog-api-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
   api:
     build:
@@ -23,15 +23,15 @@ services:
       dockerfile: Dockerfile
     container_name: blog-api-service
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
       - ASPNETCORE_URLS=http://+:8080
       - DatabaseProvider=PostgreSQL
-      - ConnectionStrings__DefaultConnection=Host=db;Database=blogs;Username=postgres;Password=password
+      - ConnectionStrings__DefaultConnection=Host=db;Database=${DB_NAME:-blogs};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-password}
       - ConnectionStrings__Redis=redis:6379
-      - JWT__Secret=YourSuperSecretKeyWithAtLeast32Characters!
-      - SEED_DATA=true
+      - JWT__Secret=${JWT_SECRET}
+      - SEED_DATA=${SEED_DATA:-true}
     ports:
-      - "8080:8080"
+      - "${API_PORT:-8080}:8080"
     depends_on:
       - db
       - redis
