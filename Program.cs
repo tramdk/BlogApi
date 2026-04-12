@@ -26,7 +26,7 @@ builder.Services
     .AddJwtAuthentication(builder.Configuration)
     .AddSignalRServices()
     .AddApplicationServices()
-    .AddInfrastructureServices()
+    .AddInfrastructureServices(builder.Configuration)
     .AddCorsPolicy(builder.Configuration);
 
 builder.Services.AddControllers()

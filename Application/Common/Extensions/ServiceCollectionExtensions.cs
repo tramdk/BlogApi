@@ -200,7 +200,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Add Infrastructure layer services (repositories, external services).
     /// </summary>
-    public static IServiceCollection AddInfrastructureServices(this IServiceCollection services)
+    public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
     {
         // Unit of Work & Repositories
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -213,8 +213,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenBlacklistService, BlogApi.Infrastructure.Services.TokenBlacklistService>();
         
         // External Services
+        services.Configure<BlogApi.Application.Common.Models.CloudinarySettings>(configuration.GetSection("Cloudinary"));
         services.AddScoped<INotificationService, BlogApi.Infrastructure.Services.NotificationService>();
-        services.AddScoped<IFileService, BlogApi.Infrastructure.Services.FileService>();
+        services.AddScoped<IFileService, BlogApi.Infrastructure.Services.CloudinaryFileService>();
         services.AddScoped<IChatService, BlogApi.Infrastructure.Services.ChatService>();
 
         return services;

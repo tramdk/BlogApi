@@ -48,6 +48,11 @@ public class FileViewUrlResolver : IValueResolver<FileMetadata, FileResponse, st
 
     public string Resolve(FileMetadata source, FileResponse destination, string destMember, ResolutionContext context)
     {
+        if (!string.IsNullOrEmpty(source.Url))
+        {
+            return source.Url;
+        }
+
         var request = _httpContextAccessor.HttpContext?.Request;
         if (request == null) return string.Empty;
 
@@ -67,6 +72,11 @@ public class FileDownloadUrlResolver : IValueResolver<FileMetadata, FileResponse
 
     public string Resolve(FileMetadata source, FileResponse destination, string destMember, ResolutionContext context)
     {
+        if (!string.IsNullOrEmpty(source.Url))
+        {
+            return source.Url;
+        }
+
         var request = _httpContextAccessor.HttpContext?.Request;
         if (request == null) return string.Empty;
 

@@ -7,6 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using System.Data.Common;
 using System.Collections.Generic;
+using BlogApi.Application.Common.Interfaces;
+using System.Linq;
 
 namespace BlogApi.Tests;
 
@@ -67,6 +69,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             var db = scopedServices.GetRequiredService<AppDbContext>();
             
             db.Database.EnsureCreated();
+
+            // Override IFileService with FakeFileService
+            services.AddScoped<IFileService, BlogApi.Tests.Mocks.FakeFileService>();
         });
     }
 

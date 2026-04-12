@@ -46,6 +46,8 @@ public class FilesControllerTests : BaseIntegrationTest
         var fileInfo = await uploadResp.Content.ReadFromJsonAsync<FileResponse>();
         Assert.NotNull(fileInfo);
         Assert.Equal("testfile.jpg", fileInfo!.FileName);
+        Assert.Contains("cloudinary.com", fileInfo.ViewUrl);
+        Assert.Contains("cloudinary.com", fileInfo.DownloadUrl);
         
         // Act - Download
         var downloadResp = await _client.GetAsync($"/api/files/download/{fileInfo.Id}");
@@ -133,5 +135,5 @@ public class FilesControllerTests : BaseIntegrationTest
     }
 
     private record AuthResponse(string AccessToken, string RefreshToken);
-    public record FileResponse(Guid Id, string FileName, bool IsPublic);
+    public record FileResponse(Guid Id, string FileName, bool IsPublic, string ViewUrl, string DownloadUrl);
 }
