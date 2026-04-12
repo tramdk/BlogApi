@@ -16,7 +16,7 @@ public class UnifiedSearchRequest
     /// Search term to match in title or content
     /// </summary>
     public string? SearchTerm { get; set; }
-    
+     
     /// <summary>
     /// Filter by category ID
     /// </summary>
