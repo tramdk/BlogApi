@@ -1,4 +1,4 @@
-﻿using BlogApi.Application.Common.Interfaces;
+using BlogApi.Application.Common.Interfaces;
 using BlogApi.Application.Common.Services;
 using BlogApi.Application.Features.Auth.DTOs;
 using BlogApi.Application.Features.Users.Queries;
@@ -15,19 +15,27 @@ namespace BlogApi.Application.Features.Auth.Commands;
 
 public record LoginCommand(string Email, string Password) : IRequest<AuthResponse>;
 
-public class LoginHandler : IRequestHandler<LoginCommand, AuthResponse>
+/// <summary>
+/// Handler for user login requests.
+/// </summary>
+/// <param name="userManager">The manager for user identity operations.</param>
+/// <param name="jwtService">The service for generating JWT tokens.</param>
+/// <param name="refreshTokenRepository">The repository for storing refresh tokens.</param>
+public class LoginHandler(
+    UserManager<AppUser> userManager, 
+    IJwtService jwtService, 
+    IGenericRepository<RefreshToken, Guid> refreshTokenRepository) : IRequestHandler<LoginCommand, AuthResponse>
 {
-    private readonly UserManager<AppUser> _userManager;
-    private readonly IJwtService _jwtService;
-    private readonly IGenericRepository<RefreshToken, Guid> _refreshTokenRepository;
+    private readonly UserManager<AppUser> _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
+    private readonly IJwtService _jwtService = jwtService ?? throw new ArgumentNullException(nameof(jwtService));
+    private readonly IGenericRepository<RefreshToken, Guid> _refreshTokenRepository = refreshTokenRepository ?? throw new ArgumentNullException(nameof(refreshTokenRepository));
 
-    public LoginHandler(UserManager<AppUser> userManager, IJwtService jwtService, IGenericRepository<RefreshToken, Guid> refreshTokenRepository)
-    {
-        _userManager = userManager;
-        _jwtService = jwtService;
-        _refreshTokenRepository = refreshTokenRepository;
-    }
-
+    /// <summary>
+    /// Handles the login request by validating credentials and generating tokens.
+    /// </summary>
+    /// <param name="request">The login command containing credentials.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An AuthResponse containing access and refresh tokens along with user details.</returns>
     public async Task<AuthResponse> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
         var user = await _userManager.FindByEmailAsync(request.Email);

@@ -7,16 +7,22 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace BlogApi.Controllers;
 
+/// <summary>
+/// Controller for managing blog posts.
+/// </summary>
+/// <param name="mediator">The mediator instance for handling commands and queries.</param>
 [ApiController]
 [Route("api/[controller]")]
-public class PostsController : ControllerBase
+public class PostsController(IMediator mediator) : ControllerBase
 {
-    private readonly IMediator _mediator;
-    public PostsController(IMediator mediator) => _mediator = mediator;
+    private readonly IMediator _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
 
     /// <summary>
-    /// Get all posts with basic pagination
+    /// Get all posts with basic pagination.
     /// </summary>
+    /// <param name="cursor">The cursor for pagination (optional).</param>
+    /// <param name="pageSize">The number of items per page (default is 10).</param>
+    /// <returns>A list of posts.</returns>
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] Guid? cursor = null, [FromQuery] int pageSize = 10)
     {
@@ -25,11 +31,18 @@ public class PostsController : ControllerBase
     }
 
     /// <summary>
-    /// Unified search endpoint - supports multiple approaches:
-    /// 1. GET with query parameters: /api/posts/search?searchTerm=react
-    /// 2. POST with simple body: { "searchTerm": "react" }
-    /// 3. POST with FilterModel: { "filters": { "title": { "filterType": "text", "type": "contains", "filter": "react" } } }
+    /// Unified search endpoint (GET) - supports multiple search approaches.
     /// </summary>
+    /// <param name="searchTerm">The term to search for.</param>
+    /// <param name="categoryId">The category ID to filter by.</param>
+    /// <param name="minRating">The minimum rating to filter by.</param>
+    /// <param name="fromDate">The start date for filtering.</param>
+    /// <param name="toDate">The end date for filtering.</param>
+    /// <param name="sortBy">The field to sort by.</param>
+    /// <param name="sortDescending">Whether to sort in descending order.</param>
+    /// <param name="page">The page number for pagination.</param>
+    /// <param name="pageSize">The number of items per page.</param>
+    /// <returns>Search results.</returns>
     [HttpGet("search")]
     [HttpGet("unified")] // For backward compatibility
     [AllowAnonymous]
@@ -62,6 +75,11 @@ public class PostsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Unified search endpoint (POST) - supports complex filter models.
+    /// </summary>
+    /// <param name="request">The search request containing filters and search terms.</param>
+    /// <returns>Search results.</returns>
     [HttpPost("search")]
     [HttpPost("unified")] // For backward compatibility
     [AllowAnonymous]
@@ -75,6 +93,11 @@ public class PostsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Get a single post by its ID.
+    /// </summary>
+    /// <param name="id">The ID of the post.</param>
+    /// <returns>The post details or NotFound if not found.</returns>
     [HttpGet("{id}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetPost(Guid id)
@@ -85,6 +108,11 @@ public class PostsController : ControllerBase
         return Ok(response);
     }
 
+    /// <summary>
+    /// Create a new post.
+    /// </summary>
+    /// <param name="command">The command containing post details.</param>
+    /// <returns>The ID of the newly created post.</returns>
     [HttpPost]
     [Authorize]
     public async Task<IActionResult> Create([FromBody] CreatePostCommand command)
@@ -93,6 +121,12 @@ public class PostsController : ControllerBase
         return Ok(id);
     }
 
+    /// <summary>
+    /// Rate a post.
+    /// </summary>
+    /// <param name="id">The ID of the post to rate.</param>
+    /// <param name="score">The rating score.</param>
+    /// <returns>Ok if successful, NotFound if the post does not exist.</returns>
     [HttpPost("{id}/rate")]
     [Authorize]
     public async Task<IActionResult> Rate(Guid id, [FromBody] int score)
@@ -101,6 +135,12 @@ public class PostsController : ControllerBase
         return result ? Ok() : NotFound();
     }
     
+    /// <summary>
+    /// Update an existing post.
+    /// </summary>
+    /// <param name="id">The ID of the post to update.</param>
+    /// <param name="command">The command containing updated post details.</param>
+    /// <returns>NoContent if successful, BadRequest if ID mismatch, or NotFound if the post does not exist.</returns>
     [HttpPut("{id}")]
     [Authorize]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdatePostCommand command)
@@ -110,6 +150,11 @@ public class PostsController : ControllerBase
         return result ? NoContent() : NotFound();
     }
 
+    /// <summary>
+    /// Delete a post.
+    /// </summary>
+    /// <param name="id">The ID of the post to delete.</param>
+    /// <returns>NoContent if successful, or NotFound if the post does not exist.</returns>
     [HttpDelete("{id}")]
     [Authorize]
     public async Task<IActionResult> Delete(Guid id)

@@ -1,4 +1,4 @@
-﻿using BlogApi.Application.Common.Attributes;
+using BlogApi.Application.Common.Attributes;
 using BlogApi.Application.Common.Interfaces;
 using BlogApi.Domain.Entities;
 using BlogApi.Application.Features.Posts.DTOs;
@@ -10,11 +10,20 @@ namespace BlogApi.Application.Features.Posts.Queries;
 [Cacheable(ExpirationMinutes = 5)]
 public record GetPostDetailQuery(Guid Id) : IRequest<PostDetailDto>;
 
-public class GetPostDetailHandler : IRequestHandler<GetPostDetailQuery, PostDetailDto>
+/// <summary>
+/// Handler for getting post details by ID.
+/// </summary>
+/// <param name="postRepository">The repository for accessing post data.</param>
+public class GetPostDetailHandler(IGenericRepository<Post, Guid> postRepository) : IRequestHandler<GetPostDetailQuery, PostDetailDto>
 {
-    private readonly IGenericRepository<Post, Guid> _postRepository;
-    public GetPostDetailHandler(IGenericRepository<Post, Guid> postRepository) => _postRepository = postRepository;
+    private readonly IGenericRepository<Post, Guid> _postRepository = postRepository ?? throw new ArgumentNullException(nameof(postRepository));
 
+    /// <summary>
+    /// Handles the request to get post details.
+    /// </summary>
+    /// <param name="request">The query request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A PostDetailDto if found; otherwise, null.</returns>
     public async Task<PostDetailDto> Handle(GetPostDetailQuery request, CancellationToken cancellationToken)
     {
         var options = new QueryOptionsBuilder<Post>()
