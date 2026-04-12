@@ -108,16 +108,18 @@ public class CloudinaryFileService : IFileService
         if (metadata.UploadedById != _currentUserService.UserId)
             throw new UnauthorizedAccessException("You are not authorized to delete this file.");
 
-        var deletionParams = new DeletionParams(metadata.PublicId ?? metadata.StoredName);
-        var result = await _cloudinary.DestroyAsync(deletionParams);
-
-        if (result.Result == "ok")
+        try
         {
-            await _repository.DeleteAsync(metadata);
-            return true;
+            var deletionParams = new DeletionParams(metadata.PublicId ?? metadata.StoredName);
+            await _cloudinary.DestroyAsync(deletionParams);
+        }
+        catch (Exception)
+        {
+            // Log warning or info: physical file deletion failed or already deleted
         }
 
-        return false;
+        await _repository.DeleteAsync(metadata);
+        return true;
     }
 
     public async Task<(byte[] Bytes, string ContentType, string FileName)> DownloadFileAsync(Guid fileId)

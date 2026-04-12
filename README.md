@@ -4,6 +4,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-.NET%208-purple?style=flat-square)
 ![Docker](https://img.shields.io/badge/docker-ready-blue?style=flat-square)
+![Cloudinary](https://img.shields.io/badge/storage-Cloudinary-3448C5?style=flat-square&logo=cloudinary)
 
 > **A production-ready REST API** built with Clean Architecture, Domain-Driven Design (DDD), and CQRS principles. Designed for scalability, maintainability, and high performance.
 
@@ -31,10 +32,10 @@ The solution follows **Clean Architecture** principles, enforcing a strict depen
 |----------------|-----------|------------------|--------------|
 | **Domain** | `BlogApi.Domain` | Enterprise Logic, Entities, Value Objects. **Core of the system.** | *None* |
 | **Application** | `BlogApi.Application` | Use Cases (MediatR Handlers), DTOs, Interfaces, Validators. | `Domain` |
-| **Infrastructure** | `BlogApi.Infrastructure` | External concerns: Database (EF/Dapper), File System, Email, Jwt. | `Application` |
+| **Infrastructure** | `BlogApi.Infrastructure` | External concerns: Database (EF/Dapper), Cloudinary, Jwt. | `Application` |
 | **Presentation** | `BlogApi.Controllers` | API Endpoints, Filters, Middleware. | `Application` |
 
-### � Folder Structure
+### 📁 Folder Structure
 ```text
 src/BlogApi
 ├── Application/
@@ -42,13 +43,13 @@ src/BlogApi
 │   ├── Features/           # Vertical Slices (e.g. Posts, Auth) containing Commands/Queries
 │   └── Constants/          # System-wide Constants (No Magic Strings)
 ├── Domain/
-│   ├── Entities/           # Core Entities (Post, User, Comment)
+│   ├── Entities/           # Core Entities (Post, User, FileMetadata)
 │   ├── ValueObjects/       # Immutable objects (Email, Money)
 │   └── Exceptions/         # Domain-specific Errors
 ├── Infrastructure/
 │   ├── Data/               # DbContext, Migrations, Seeding
 │   ├── Repositories/       # Implementations of Repositories
-│   └── Services/           # Implementations of Interfaces (EmailService, FileService)
+│   └── Services/           # Implementations of Interfaces (CloudinaryFileService, JwtService)
 └── Controllers/            # API Entry Points
 ```
 
@@ -63,10 +64,14 @@ src/BlogApi
 - **FluentValidation**: Strong-typed validation rules.
 
 ### Data Access
-- **SQL Server**: Primary relational database.
+- **SQL Server / PostgreSQL**: Multi-database support via configuration.
 - **Entity Framework Core 8**: Code-First ORM for Command operations (Write).
 - **Dapper**: Micro-ORM for high-performance Query operations (Read).
 - **SQLite**: Used for isolated Integration Tests.
+
+### ☁️ File Storage
+- **Cloudinary**: Cloud-based file storage for all uploads. Files are stored and served directly from Cloudinary CDN, eliminating the need for server-side disk storage.
+- Package: `CloudinaryDotNet` (official SDK).
 
 ### Real-time & Security
 - **SignalR**: WebSocket support for real-time features.
@@ -85,16 +90,25 @@ src/BlogApi
 - **Centralized Revocation**: Tokens can be blacklisted instantly (e.g., on logout or breach).
 - **IP Rate Limiting**: Protects login endpoints (`limit: 5/minute`) and general API (`limit: 100/minute`).
 - **Policy Authorization**: Granular permissions (e.g., "MustBeAuthor" policy).
+- **File Ownership**: Only the file owner can delete their files; private files are accessible only to their owner.
+
+### ☁️ Cloud File Storage
+- **Cloudinary Integration**: Files are uploaded directly to Cloudinary and served via CDN URLs.
+- **Zero Disk Usage**: No server-side `uploads/` folder required for file serving.
+- **Graceful Deletion**: If a file is already missing on Cloudinary, the database metadata is still cleaned up automatically.
+- **Secure CDN URLs**: `ViewUrl` and `DownloadUrl` in all file responses point directly to Cloudinary CDN.
 
 ### ⚡ Performance Optimized
 - **CQRS**: Separates Reads (Dapper) from Writes (EF Core).
 - **Pagination**: Efficient cursor-based or offset-based pagination.
-- **Caching**: Preparation for Redis distributed caching.
+- **CDN**: Cloudinary CDN handles file delivery globally with low latency.
+- **Caching**: Redis distributed caching for rate limiting and session data.
 
 ### 📝 Developer Experience
 - **No Manual Mapping**: AutoMapper handles boring mapping work.
 - **Unified Result**: Standardized API responses (Success/Fail wrappers).
 - **Development Seeding**: Auto-generates Admin user and sample data.
+- **Test-Friendly**: `FakeFileService` mock allows running all tests without Cloudinary credentials.
 
 ---
 
@@ -103,6 +117,7 @@ src/BlogApi
 ### Prerequisites
 - .NET 8 SDK
 - SQL Server (LocalDB or Docker)
+- A **Cloudinary** account ([cloudinary.com](https://cloudinary.com) — free tier is sufficient)
 
 ### 1️⃣ Clone & Restore
 ```bash
@@ -111,14 +126,31 @@ cd blog-api
 dotnet restore
 ```
 
-### 2️⃣ Database Setup
+### 2️⃣ Configure Cloudinary
+Get your credentials from the [Cloudinary Dashboard](https://cloudinary.com/console). Add them to your `.env` file:
+```bash
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+Or directly in `appsettings.json` (not recommended for production):
+```json
+"Cloudinary": {
+  "CloudName": "your_cloud_name",
+  "ApiKey": "your_api_key",
+  "ApiSecret": "your_api_secret"
+}
+```
+
+### 3️⃣ Database Setup
 Ensure your connection string in `appsettings.json` is correct (`DefaultConnection`).
 ```bash
 # Apply migrations and create database
 dotnet ef database update
 ```
 
-### 3️⃣ Run Application
+### 4️⃣ Run Application
 ```bash
 dotnet watch run --project BlogApi
 ```
@@ -153,18 +185,31 @@ The `appsettings.json` file controls the application behavior.
 
 | Section | Key | Description |
 |---------|-----|-------------|
-| **ConnectionStrings** | `DefaultConnection` | SQL Server connection string. |
-| | `Redis` | Redis connection (optional). |
+| **ConnectionStrings** | `DefaultConnection` | Database connection string (SQL Server or PostgreSQL). |
+| | `Redis` | Redis connection (optional, falls back to in-memory). |
 | **Jwt** | `Secret` | **CRITICAL**: Must be 32+ chars. Used to sign tokens. |
 | | `ExpiryMinutes` | Token lifetime (default 60). |
-| **FileStorage** | `UploadFolder` | Directory name for uploaded files (default `uploads`). |
+| **Cloudinary** | `CloudName` | Your Cloudinary cloud name. |
+| | `ApiKey` | Your Cloudinary API key. |
+| | `ApiSecret` | **CRITICAL**: Your Cloudinary API secret. Never commit to Git. |
 | **IpRateLimiting** | `GeneralRules` | Set global or endpoint-specific limits. |
+
+### File API Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/files/upload` | ✅ Required | Upload a file to Cloudinary. Returns CDN URL. |
+| `POST` | `/api/files/metadata` | ❌ Public | Get file metadata by `objectId`. |
+| `GET` | `/api/files/download/{id}` | ❌ Public | Download file by ID (proxied from Cloudinary). |
+| `GET` | `/api/files/view/{id}` | ❌ Public | View file inline (proxied from Cloudinary). |
+| `GET` | `/api/files/view/object/{objectId}` | ❌ Public | View latest file for a given object. |
+| `DELETE` | `/api/files/{id}` | ✅ Required | Delete file from Cloudinary and remove metadata from DB. |
 
 ---
 
-## �‍💻 Developer Guide
+## 👨‍💻 Developer Guide
 
-### adding a New Feature (Vertical Slice)
+### Adding a New Feature (Vertical Slice)
 
 1.  **Define Domain**: Add Entity in `Domain/Entities`.
 2.  **Define Contract**: Create DTOs in `Application/Features/[Feature]/DTOs`.
@@ -180,6 +225,28 @@ The `appsettings.json` file controls the application behavior.
 ## 🐳 Deployment (Docker)
 
 We provide automated scripts to make local deployment on **Docker Desktop** seamless.
+
+### 🔐 Environment Setup
+Copy `.env.example` to `.env` and fill in your credentials:
+```bash
+cp .env.example .env
+```
+
+Required variables in `.env`:
+```bash
+# Database
+DB_PASSWORD=your_secure_password
+
+# JWT
+JWT_SECRET=your_secret_key_at_least_32_chars
+
+# Cloudinary (required for file uploads)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+These values are automatically injected into the Docker container via `docker-compose.yml`.
 
 ### 💨 One-Click Automatic Deployment
 The `deploy-docker.ps1` script handles everything: stopping old containers, building, starting services, and opening the API docs once ready.
@@ -210,16 +277,26 @@ docker run -p 8080:8080 blog-api
 We prioritize **Integration Tests** to ensure system reliability.
 
 - **Framework**: xUnit + WebApplicationFactory.
-- **Database**: SQLite In-Memory (Persistent Mode).
-- **Strategy**: Every test spins up a fresh scope but shares the connection for performance.
+- **Database**: SQLite In-Memory (Persistent Mode) — no real database needed.
+- **File Storage**: `FakeFileService` is registered in the test environment, replacing `CloudinaryFileService`. **No Cloudinary API keys are required to run tests.**
+- **Strategy**: Every test spins up a fresh scope but shares the in-memory connection for performance.
 
 ```bash
 # Run all tests
 dotnet test
 
-# Run specific suite
-dotnet test --filter "FullyQualifiedName~FilesControllerTests"
+# Run file-specific tests
+dotnet test --filter "FilesControllerTests"
 ```
+
+### Test Coverage for File API
+
+| Test | What It Verifies |
+|------|-----------------|
+| `UploadAndDownloadFile_Works` | Upload succeeds and response includes Cloudinary CDN URLs. |
+| `PrivateFile_CannotBeAccessedByOthers` | Private files are blocked for non-owners (403 Forbidden). |
+| `PublicFile_CanBeAccessedByOthers` | Public files are accessible to all authenticated users. |
+| `DeleteFile_Works` | File is removed from cloud storage and metadata cleaned from DB. |
 
 ---
 
