@@ -47,6 +47,7 @@ public class DatabaseSeeder
             await SeedRolesAsync();
             var adminUser = await SeedAdminUserAsync();
             await SeedProductCategoriesAndProductsAsync();
+            await SeedPostCategoriesAsync();
             await SeedPostsAsync(adminUser);
         }
         catch (Exception ex)
@@ -174,6 +175,33 @@ public class DatabaseSeeder
                 CreatedAt = DateTime.UtcNow
             }
         });
+        await _context.SaveChangesAsync();
+    }
+
+    private async Task SeedPostCategoriesAsync()
+    {
+        if (_context.PostCategories.Any()) return;
+
+        _context.PostCategories.AddRange(
+            new PostCategory
+            {
+                Id = "flower-care",
+                Name = "Chăm sóc hoa",
+                CreatedAt = DateTime.UtcNow
+            },
+            new PostCategory
+            {
+                Id = "flower-meaning",
+                Name = "Ý nghĩa hoa",
+                CreatedAt = DateTime.UtcNow
+            },
+            new PostCategory
+            {
+                Id = "wedding-trends",
+                Name = "Xu hướng",
+                CreatedAt = DateTime.UtcNow
+            }
+        );
         await _context.SaveChangesAsync();
     }
 
