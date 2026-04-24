@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blogapi-config
+  namespace: default
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  DatabaseProvider: "PostgreSQL"
+  # Thêm các biến cấu hình không bảo mật khác tại đây

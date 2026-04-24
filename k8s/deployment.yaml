@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blogapi-deployment
+  namespace: default
+  labels:
+    app: blogapi
+spec:
+  replicas: 2 # Chạy 2 bản sao để đảm bảo High Availability (HA)
+  selector:
+    matchLabels:
+      app: blogapi
+  template:
+    metadata:
+      labels:
+        app: blogapi
+    spec:
+      containers:
+      - name: blogapi
+        # ⚠️ Đã đổi sang image local để test trên Kind
+        image: blogapi:local
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080 # ASP.NET Core 8.0+ dùng port 8080 mặc định cho non-root
+        
+        envFrom:
+        - configMapRef:
+            name: blogapi-config
+        - secretRef:
+            name: blogapi-secrets
+            
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+            
+        # ⚠️ BỎ COMMENT phần dưới nếu bạn dùng FileService lưu ảnh ở Local (chưa xài Cloudinary)
+        # volumeMounts:
+        # - name: uploads-volume
+        #   mountPath: /app/test_uploads # Thư mục lưu file trong container, đổi theo cấu hình app của bạn
+      
+      # volumes:
+      # - name: uploads-volume
+      #   persistentVolumeClaim:
+      #     claimName: blogapi-pvc

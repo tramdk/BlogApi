@@ -1,0 +1,48 @@
+name: CI/CD Pipeline
+
+on:
+  # 1. Chạy khi bạn đánh dấu phiên bản (ví dụ: v1.0.0, v2.1)
+  push:
+    tags:
+      - 'v*'
+    # Lọc bỏ: Không chạy nếu chỉ sửa tài liệu
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - '.gitignore'
+
+  # 2. Cho phép nhấn nút chạy thủ công từ giao diện GitHub
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        # Bạn cần cài đặt 2 biến này trong GitHub Secrets
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        # Tự động lấy tên tag từ git (ví dụ: v1.0) để đặt cho image
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/blogapi:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/blogapi:${{ github.ref_name }}
+          
+    - name: Notify Deployment
+      run: echo "🎉 Image đã được push thành công! Sẵn sàng để cập nhật lên Kubernetes."

@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: blogapi-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    # Bỏ comment dòng dưới để tự động cấp phát chứng chỉ SSL/HTTPS bằng cert-manager
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx # Tuỳ thuộc vào Nginx Ingress Controller của K8s
+  
+  # Bỏ comment phần tls để bật HTTPS
+  # tls:
+  # - hosts:
+  #   - api.yourdomain.com
+  #   secretName: blogapi-tls-cert
+  
+  rules:
+  - host: api.yourdomain.com # ⚠️ QUAN TRỌNG: Thay bằng domain thực tế của bạn
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: blogapi-service
+            port:
+              number: 80
