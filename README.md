@@ -60,7 +60,7 @@ src/BlogApi
 ### Core
 - **.NET 8** (LTS) providing high-performance runtime.
 - **MediatR**: Implements Mediator pattern for decoupling features.
-- **AutoMapper**: Handles object-to-object mapping.
+- **AutoMapper v16.1**: Handles object-to-object mapping efficiently.
 - **FluentValidation**: Strong-typed validation rules.
 
 ### Data Access
@@ -311,3 +311,4 @@ Contributions are welcome! Please follow the **Pull Request** workflow.
 ---
 
 **Happy Coding!** 🚀
+
