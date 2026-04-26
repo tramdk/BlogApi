@@ -23,15 +23,8 @@ public class AuthController(IMediator mediator) : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginCommand command)
     {
-        try
-        {
-            var response = await _mediator.Send(command);
-            return Ok(response);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(ex.Message);
-        }
+        var response = await _mediator.Send(command);
+        return Ok(response);
     }
 
     /// <summary>
@@ -69,5 +62,25 @@ public class AuthController(IMediator mediator) : ControllerBase
         var accessToken = Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
         await _mediator.Send(new LogoutCommand(accessToken));
         return Ok();
+    }
+
+    /// <summary>
+    /// Changes the user's password and invalidates all existing sessions (tokens).
+    /// </summary>
+    /// <param name="command">The change password command.</param>
+    /// <returns>Ok if successful, BadRequest if validation fails.</returns>
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordCommand command)
+    {
+        try
+        {
+            var result = await _mediator.Send(command);
+            return result ? Ok() : BadRequest();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 }

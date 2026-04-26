@@ -11,7 +11,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using BlogApi.Infrastructure.Repositories;
-using UUIDNext;
+
+using BlogApi.Domain.Exceptions;
 
 namespace BlogApi.Infrastructure.Services;
 
@@ -63,7 +64,7 @@ public class FileService : IFileService
 
         var metadata = new FileMetadata
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             FileName = file.FileName,
             StoredName = storedName,
             FilePath = filePath,
@@ -111,7 +112,7 @@ public class FileService : IFileService
 
         // Security Check: Only the owner can delete the file
         if (metadata.UploadedById != _currentUserService.UserId)
-            throw new UnauthorizedAccessException("You are not authorized to delete this file.");
+            throw new AccessDeniedException("You are not authorized to delete this file.");
 
         if (File.Exists(metadata.FilePath))
         {
@@ -130,7 +131,7 @@ public class FileService : IFileService
 
         // Security Check: Access is allowed if file is public OR current user is the owner
         if (!metadata.IsPublic && metadata.UploadedById != _currentUserService.UserId)
-            throw new UnauthorizedAccessException("You are not authorized to access this private file.");
+            throw new AccessDeniedException("You are not authorized to access this private file.");
 
         var bytes = await File.ReadAllBytesAsync(metadata.FilePath);
         return (bytes, metadata.ContentType, metadata.FileName);
@@ -150,7 +151,7 @@ public class FileService : IFileService
 
         // Security Check: Access is allowed if file is public OR current user is the owner
         if (!metadata.IsPublic && metadata.UploadedById != _currentUserService.UserId)
-            throw new UnauthorizedAccessException("You are not authorized to access this private file.");
+            throw new AccessDeniedException("You are not authorized to access this private file.");
 
         var bytes = await File.ReadAllBytesAsync(metadata.FilePath);
         return (bytes, metadata.ContentType, metadata.FileName);

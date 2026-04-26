@@ -1,4 +1,4 @@
-﻿using BlogApi.Application.Common.Interfaces;
+using BlogApi.Application.Common.Interfaces;
 using BlogApi.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +6,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Application.Features.Cart.Commands;
 
@@ -42,7 +42,7 @@ public class AddToCartCommandHandler : IRequestHandler<AddToCartCommand, Unit>
 
             cart = new BlogApi.Domain.Entities.Cart 
             { 
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Guid.NewGuid(),
                 UserId = userId 
             };
             await _cartRepository.AddAsync(cart);
@@ -68,7 +68,7 @@ public class AddToCartCommandHandler : IRequestHandler<AddToCartCommand, Unit>
         {
             var newItem = new CartItem
             {
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Guid.NewGuid(),
                 CartId = cart.Id,
                 ProductId = request.ProductId,
                 Quantity = request.Quantity

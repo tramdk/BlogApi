@@ -1,9 +1,15 @@
-﻿using BlogApi.Application.Common.Interfaces;
+using BlogApi.Application.Common.Interfaces;
 using BlogApi.Domain.Entities;
+using BlogApi.Domain.Exceptions;
 using MediatR;
 
 namespace BlogApi.Application.Common.Behaviors;
 
+/// <summary>
+/// Pipeline behavior that enforces ownership authorization for requests
+/// implementing <see cref="IOwnershipRequest"/>.
+/// Currently supports Post ownership checks.
+/// </summary>
 public class AuthorizationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>
 {
@@ -20,19 +26,17 @@ public class AuthorizationBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
     {
         if (request is IOwnershipRequest ownershipRequest)
         {
-            var userId = _currentUserService.UserId;
-            if (userId == null)
-            {
-                throw new UnauthorizedAccessException();
-            }
+            var userId = _currentUserService.UserId
+                ?? throw new UnauthorizedAccessException("User is not authenticated.");
 
-            // Since our IOwnershipRequest is currently only for Posts, we check IGenericRepository<Post, Guid>
-            // In a more complex app, we might use a factory or switch based on request type
-            var post = await _postRepository.GetByIdAsync(ownershipRequest.Id);
-            
-            if (post != null && post.AuthorId != userId)
+            // Check Post ownership. Extend this block when other entities need ownership checks.
+            if (request is IPostOwnershipRequest)
             {
-                throw new UnauthorizedAccessException("You are not the owner of this post.");
+                var post = await _postRepository.GetByIdAsync(ownershipRequest.Id)
+                    ?? throw new EntityNotFoundException("Post", ownershipRequest.Id);
+
+                if (post.AuthorId != userId)
+                    throw new AccessDeniedException($"post '{ownershipRequest.Id}'");
             }
         }
 

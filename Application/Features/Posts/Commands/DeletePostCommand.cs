@@ -1,10 +1,10 @@
-﻿using BlogApi.Application.Common.Interfaces;
+using BlogApi.Application.Common.Interfaces;
 using BlogApi.Domain.Entities;
 using MediatR;
 
 namespace BlogApi.Application.Features.Posts.Commands;
 
-public record DeletePostCommand(Guid Id) : IRequest<bool>, IOwnershipRequest;
+public record DeletePostCommand(Guid Id) : IRequest<bool>, IPostOwnershipRequest;
 
 public class DeletePostCommandHandler : IRequestHandler<DeletePostCommand, bool>
 {

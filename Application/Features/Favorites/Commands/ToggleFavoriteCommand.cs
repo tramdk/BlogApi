@@ -1,4 +1,4 @@
-﻿using BlogApi.Application.Common.Interfaces;
+using BlogApi.Application.Common.Interfaces;
 using BlogApi.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +6,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Application.Features.Favorites.Commands;
 
@@ -39,7 +39,7 @@ public class ToggleFavoriteCommandHandler : IRequestHandler<ToggleFavoriteComman
         {
             await _favoriteRepository.AddAsync(new Favorite
             {
-                Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+                Id = Guid.NewGuid(),
                 UserId = userId,
                 ProductId = request.ProductId
             });

@@ -28,6 +28,7 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
         return await _dbSet.FindAsync(id);
     }
 
+    [Obsolete("Avoid using GetAllAsync() in production — it loads the entire table. Use GetWithOptionsAsync() with pagination.")]
     public virtual async Task<IEnumerable<TEntity>> GetAllAsync()
     {
         return await _dbSet.ToListAsync();

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Application.Features.Auth.Commands;
 
@@ -25,7 +25,7 @@ public class RegisterHandler : IRequestHandler<RegisterCommand, bool>
     {
         var user = new AppUser 
         { 
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             Email = request.Email, 
             UserName = request.Email, 
             FullName = request.FullName 

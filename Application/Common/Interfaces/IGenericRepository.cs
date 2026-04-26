@@ -17,8 +17,13 @@ public interface IGenericRepository<TEntity, TKey> where TEntity : class
     Task<TEntity?> GetByIdAsync(TKey id);
     
     /// <summary>
-    /// Get all entities
+    /// Get all entities without any filtering or pagination.
     /// </summary>
+    /// <remarks>
+    /// WARNING: This loads ALL records into memory. For large tables, use
+    /// <see cref="GetWithOptionsAsync"/> with pagination instead.
+    /// </remarks>
+    [Obsolete("Avoid using GetAllAsync() in production — it loads the entire table. Use GetWithOptionsAsync() with pagination.")]
     Task<IEnumerable<TEntity>> GetAllAsync();
     
     /// <summary>

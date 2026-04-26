@@ -1,5 +1,6 @@
 using BlogApi.Application.Features.Users.Commands;
 using BlogApi.Application.Features.Users.Queries;
+using BlogApi.Application.Common.Constants;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,7 +21,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize]
+    [Authorize(Roles = RoleConstants.Admin)]
     public async Task<IActionResult> GetAll([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
     {
         var result = await _mediator.Send(new GetUsersQuery(pageNumber, pageSize));
@@ -36,7 +37,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize]
+    [Authorize(Roles = RoleConstants.Admin)]
     public async Task<IActionResult> Create([FromBody] CreateUserCommand command)
     {
         try
@@ -61,7 +62,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize]
+    [Authorize(Roles = RoleConstants.Admin)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var result = await _mediator.Send(new DeleteUserCommand(id));

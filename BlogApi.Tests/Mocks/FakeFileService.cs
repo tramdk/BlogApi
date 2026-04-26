@@ -1,5 +1,6 @@
 using BlogApi.Application.Common.Interfaces;
 using BlogApi.Domain.Entities;
+using BlogApi.Domain.Exceptions;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
@@ -69,7 +70,7 @@ public class FakeFileService : IFileService
         if (metadata == null) throw new FileNotFoundException();
 
         if (!metadata.IsPublic && metadata.UploadedById != _currentUserService.UserId)
-            throw new UnauthorizedAccessException();
+            throw new AccessDeniedException("private file");
 
         return (new byte[] { 1, 2, 3, 4 }, metadata.ContentType, metadata.FileName);
     }
@@ -81,7 +82,7 @@ public class FakeFileService : IFileService
         if (metadata == null) throw new FileNotFoundException();
 
         if (!metadata.IsPublic && metadata.UploadedById != _currentUserService.UserId)
-            throw new UnauthorizedAccessException();
+            throw new AccessDeniedException("private file");
 
         return (new byte[] { 1, 2, 3, 4 }, metadata.ContentType, metadata.FileName);
     }

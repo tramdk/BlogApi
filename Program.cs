@@ -84,6 +84,9 @@ if (app.Environment.IsDevelopment() || Environment.GetEnvironmentVariable("SEED_
     await app.SeedDatabaseAsync();
 }
 
+// 3. Sync Token Blacklist to Cache (Crucial for security when using in-memory cache and app restarts)
+await app.SyncTokenBlacklistAsync();
+
 app.Run();
 
 // Required for integration tests

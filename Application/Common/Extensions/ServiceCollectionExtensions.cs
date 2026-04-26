@@ -191,7 +191,7 @@ public static class ServiceCollectionExtensions
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
         });
 
-        services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+        services.AddAutoMapper(cfg => {}, typeof(Program).Assembly);
 
 
         return services;
@@ -256,8 +256,12 @@ public static class ServiceCollectionExtensions
                 }
                 else
                 {
-                    // Fallback for development if not configured
-                    policy.SetIsOriginAllowed(_ => true)
+                    // Fallback for local development when origins are not configured
+                    policy.WithOrigins(
+                              "http://localhost:3000",
+                              "http://localhost:4200",
+                              "http://localhost:5173",
+                              "http://localhost:8080")
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();

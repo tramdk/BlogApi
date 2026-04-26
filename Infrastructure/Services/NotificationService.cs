@@ -5,7 +5,7 @@ using BlogApi.Infrastructure.Hubs;
 using BlogApi.Infrastructure.Repositories;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Infrastructure.Services;
 
@@ -24,7 +24,7 @@ public class NotificationService : INotificationService
     {
         var notification = new Notification
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             UserId = userId,
             Title = title,
             Message = message,

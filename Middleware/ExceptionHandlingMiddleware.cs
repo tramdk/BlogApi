@@ -53,8 +53,8 @@ public class ExceptionHandlingMiddleware
                 break;
 
             case UnauthorizedAccessException:
-                statusCode = StatusCodes.Status403Forbidden;
-                responseModel = new { Message = "Forbidden" };
+                statusCode = StatusCodes.Status401Unauthorized;
+                responseModel = new { Message = "Unauthorized" };
                 break;
                 
             case AccessDeniedException:

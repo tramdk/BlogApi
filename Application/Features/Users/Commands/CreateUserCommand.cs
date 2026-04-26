@@ -5,7 +5,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Application.Features.Users.Commands;
 
@@ -24,7 +24,7 @@ public class CreateUserHandler : IRequestHandler<CreateUserCommand, Guid>
     {
         var user = new AppUser
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             Email = request.Email,
             UserName = request.Email,
             FullName = request.FullName

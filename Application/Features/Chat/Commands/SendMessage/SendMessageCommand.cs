@@ -1,7 +1,7 @@
 using BlogApi.Application.Common.Interfaces;
 using BlogApi.Domain.Entities;
 using MediatR;
-using UUIDNext;
+
 
 namespace BlogApi.Application.Features.Chat.Commands.SendMessage;
 
@@ -29,7 +29,7 @@ public class SendMessageCommandHandler : IRequestHandler<SendMessageCommand, Gui
         
         var chatMessage = new ChatMessage
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             SenderId = senderId,
             ReceiverId = request.ReceiverId,
             Message = request.Message,

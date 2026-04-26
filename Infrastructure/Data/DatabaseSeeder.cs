@@ -311,4 +311,43 @@ public static class DatabaseSeederExtensions
              Log.Error(ex, "ERROR: Failed to seed database.");
         }
     }
+
+    /// <summary>
+    /// Synchronize revoked tokens from the database into the distributed cache.
+    /// This fixes the vulnerability where in-memory cache blacklists are lost upon application restart.
+    /// </summary>
+    public static async Task SyncTokenBlacklistAsync(this WebApplication app)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var blacklistService = scope.ServiceProvider.GetRequiredService<BlogApi.Application.Common.Services.ITokenBlacklistService>();
+
+            // Only fetch revoked tokens that haven't expired yet
+            var activeRevokedTokens = await context.RefreshTokens
+                .Where(rt => rt.IsRevoked && rt.ExpiryDate > DateTime.UtcNow)
+                .ToListAsync();
+
+            int syncCount = 0;
+            foreach (var rt in activeRevokedTokens)
+            {
+                var expiry = rt.ExpiryDate - DateTime.UtcNow;
+                if (expiry > TimeSpan.Zero && !string.IsNullOrEmpty(rt.Jti))
+                {
+                    await blacklistService.BlacklistTokenAsync(rt.Jti, expiry);
+                    syncCount++;
+                }
+            }
+
+            if (syncCount > 0)
+            {
+                Log.Information("Synchronized {Count} revoked tokens to blacklist cache.", syncCount);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "ERROR: Failed to sync token blacklist.");
+        }
+    }
 }

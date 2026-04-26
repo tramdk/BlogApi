@@ -1,7 +1,7 @@
-﻿using BlogApi.Application.Common.Interfaces;
+using BlogApi.Application.Common.Interfaces;
 using BlogApi.Domain.Entities;
 using MediatR;
-using UUIDNext;
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,7 +27,7 @@ public class CreatePostHandler : IRequestHandler<CreatePostCommand, Guid>
 
         var post = new Post 
         { 
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer), 
+            Id = Guid.NewGuid(), 
             Title = request.Title, 
             Content = request.Content, 
             AuthorId = userId,

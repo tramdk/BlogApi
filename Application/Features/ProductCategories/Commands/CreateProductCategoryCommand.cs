@@ -1,10 +1,10 @@
-﻿using BlogApi.Domain.Entities;
+using BlogApi.Domain.Entities;
 using BlogApi.Application.Common.Interfaces;
 using MediatR;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Application.Features.ProductCategories.Commands;
 
@@ -23,7 +23,7 @@ public class CreateProductCategoryCommandHandler : IRequestHandler<CreateProduct
     {
         var category = new ProductCategory
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             Name = request.Name,
             Description = request.Description,
             ImageUrl = request.ImageUrl,

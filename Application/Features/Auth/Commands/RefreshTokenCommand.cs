@@ -1,4 +1,4 @@
-﻿using BlogApi.Application.Common.Services;
+using BlogApi.Application.Common.Services;
 using BlogApi.Application.Features.Auth.DTOs;
 using BlogApi.Application.Features.Users.Queries;
 using BlogApi.Domain.Entities;
@@ -9,7 +9,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Application.Features.Auth.Commands;
 
@@ -52,7 +52,7 @@ public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, AuthResp
         
         await _refreshTokenRepository.AddAsync(new RefreshToken
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             Token = newRefreshTokenStr,
             Jti = newJti,
             ExpiryDate = DateTime.UtcNow.AddDays(7),

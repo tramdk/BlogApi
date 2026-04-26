@@ -1,4 +1,4 @@
-﻿using BlogApi.Application.Common.Interfaces;
+using BlogApi.Application.Common.Interfaces;
 using BlogApi.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +6,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Application.Features.Reviews.Commands;
 
@@ -40,7 +40,7 @@ public class AddProductReviewCommandHandler : IRequestHandler<AddProductReviewCo
 
         var review = new ProductReview
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             ProductId = request.ProductId,
             UserId = userId,
             Rating = request.Rating,

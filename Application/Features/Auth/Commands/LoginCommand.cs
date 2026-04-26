@@ -9,7 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Application.Features.Auth.Commands;
 
@@ -48,7 +48,7 @@ public class LoginHandler(
 
         var refreshToken = new RefreshToken
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             Token = refreshTokenStr,
             Jti = jti,
             ExpiryDate = DateTime.UtcNow.AddDays(7),

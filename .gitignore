@@ -65,6 +65,10 @@ publish/
 .DS_Store
 Thumbs.db
 
+# Local development tools (do not commit binaries)
+kind.exe
+kind
+
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -73,3 +77,7 @@ Thumbs.db
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Documentation
+/docs/
+docs/

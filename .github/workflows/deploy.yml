@@ -1,23 +1,20 @@
 name: CI/CD Pipeline
 
 on:
-  # 1. Chạy khi bạn đánh dấu phiên bản (ví dụ: v1.0.0, v2.1)
+  # Chạy khi bạn đánh dấu phiên bản (ví dụ: v1.0.0, v2.1)
+  # Lưu ý: paths-ignore KHÔNG hoạt động với trigger 'push: tags' trên GitHub Actions
   push:
     tags:
       - 'v*'
-    # Lọc bỏ: Không chạy nếu chỉ sửa tài liệu
-    paths-ignore:
-      - 'docs/**'
-      - 'README.md'
-      - '.gitignore'
 
-  # 2. Cho phép nhấn nút chạy thủ công từ giao diện GitHub
+  # Cho phép nhấn nút chạy thủ công từ giao diện GitHub
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  test:
+    name: Run Tests
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -27,22 +24,47 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+
+    - name: Run Tests
+      run: dotnet test BlogApi.Tests/BlogApi.Tests.csproj --configuration Release --verbosity normal
+      env:
+        ASPNETCORE_ENVIRONMENT: Testing
+        SKIP_REDIS: "true"
+
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test  # Chỉ chạy khi test thành công
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
-        # Bạn cần cài đặt 2 biến này trong GitHub Secrets
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
     - name: Build and Push Docker Image
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
         # Tự động lấy tên tag từ git (ví dụ: v1.0) để đặt cho image
         tags: |
           ${{ secrets.DOCKERHUB_USERNAME }}/blogapi:latest
           ${{ secrets.DOCKERHUB_USERNAME }}/blogapi:${{ github.ref_name }}
-          
+
     - name: Notify Deployment
-      run: echo "🎉 Image đã được push thành công! Sẵn sàng để cập nhật lên Kubernetes."
+      run: echo "🎉 Image đã được push thành công! Tag=${{ github.ref_name }}"

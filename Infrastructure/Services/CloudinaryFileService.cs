@@ -12,7 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using UUIDNext;
+
 
 namespace BlogApi.Infrastructure.Services;
 
@@ -58,7 +58,7 @@ public class CloudinaryFileService : IFileService
 
         var metadata = new FileMetadata
         {
-            Id = Uuid.NewDatabaseFriendly(Database.SqlServer),
+            Id = Guid.NewGuid(),
             FileName = file.FileName,
             StoredName = uploadResult.PublicId,
             FilePath = uploadResult.SecureUrl.ToString(),
