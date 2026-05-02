@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace BlogApi.Application.Features.ProductCategories.Commands;
 
-public record CreateProductCategoryCommand(string Name, string Description, string? ImageUrl) : IRequest<Guid>;
+public record CreateProductCategoryCommand(Guid? Id, string Name, string Description, string? ImageUrl) : IRequest<Guid>;
 
 public class CreateProductCategoryCommandHandler : IRequestHandler<CreateProductCategoryCommand, Guid>
 {
@@ -23,7 +23,7 @@ public class CreateProductCategoryCommandHandler : IRequestHandler<CreateProduct
     {
         var category = new ProductCategory
         {
-            Id = Guid.NewGuid(),
+            Id = request.Id ?? Guid.NewGuid(),
             Name = request.Name,
             Description = request.Description,
             ImageUrl = request.ImageUrl,

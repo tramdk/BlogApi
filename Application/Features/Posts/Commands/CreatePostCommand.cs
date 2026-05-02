@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace BlogApi.Application.Features.Posts.Commands;
 
-public record CreatePostCommand(string Title, string Content, string? CategoryId = null) : IRequest<Guid>;
+public record CreatePostCommand(Guid? Id, string Title, string Content, string? CategoryId = null) : IRequest<Guid>;
 
 public class CreatePostHandler : IRequestHandler<CreatePostCommand, Guid>
 {
@@ -27,7 +27,7 @@ public class CreatePostHandler : IRequestHandler<CreatePostCommand, Guid>
 
         var post = new Post 
         { 
-            Id = Guid.NewGuid(), 
+            Id = request.Id ?? Guid.NewGuid(), 
             Title = request.Title, 
             Content = request.Content, 
             AuthorId = userId,

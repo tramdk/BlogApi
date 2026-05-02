@@ -1,4 +1,4 @@
-﻿using BlogApi.Domain.Entities;
+using BlogApi.Domain.Entities;
 using BlogApi.Application.Common.Interfaces;
 using MediatR;
 using UUIDNext;
@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace BlogApi.Application.Features.Products.Commands;
 
-public record CreateProductCommand(string Name, string Description, decimal Price, int Stock, string? ImageUrl, Guid? CategoryId) : IRequest<Guid>;
+public record CreateProductCommand(Guid? Id, string Name, string Description, decimal Price, int Stock, string? ImageUrl, Guid? CategoryId) : IRequest<Guid>;
 
 public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand, Guid>
 {
@@ -23,7 +23,7 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
     {
         var product = new Product
         {
-            Id = Uuid.NewDatabaseFriendly(Database.PostgreSql),
+            Id = request.Id ?? Uuid.NewDatabaseFriendly(Database.PostgreSql),
             Name = request.Name,
             Description = request.Description,
             Price = request.Price,
