@@ -34,7 +34,7 @@ public class PostsControllerTests : BaseIntegrationTest
         var token = await GetTokenAsync();
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var command = new CreatePostCommand("Test Post", "Content here");
+        var command = new CreatePostCommand(null, "Test Post", "Content here");
 
         // Act
         var response = await _client.PostAsJsonAsync("/api/posts", command);
@@ -52,7 +52,7 @@ public class PostsControllerTests : BaseIntegrationTest
         var token = await GetTokenAsync("reader@test.com");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var createCmd = new CreatePostCommand("Get Test", "Content");
+        var createCmd = new CreatePostCommand(null, "Get Test", "Content");
         var createResp = await _client.PostAsJsonAsync("/api/posts", createCmd);
         var id = await createResp.Content.ReadFromJsonAsync<Guid>();
 
@@ -73,7 +73,7 @@ public class PostsControllerTests : BaseIntegrationTest
         var token = await GetTokenAsync("rater@test.com");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var createCmd = new CreatePostCommand("Rating Test", "Content");
+        var createCmd = new CreatePostCommand(null, "Rating Test", "Content");
         var createResp = await _client.PostAsJsonAsync("/api/posts", createCmd);
         var id = await createResp.Content.ReadFromJsonAsync<Guid>();
 
@@ -96,7 +96,7 @@ public class PostsControllerTests : BaseIntegrationTest
         var token = await GetTokenAsync("validator@test.com");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var command = new CreatePostCommand("", "Content"); // Empty title
+        var command = new CreatePostCommand(null, "", "Content"); // Empty title
 
         // Act
         var response = await _client.PostAsJsonAsync("/api/posts", command);
@@ -111,7 +111,7 @@ public class PostsControllerTests : BaseIntegrationTest
         // 1. Author creates a post
         var authorToken = await GetTokenAsync("author1@test.com");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", authorToken);
-        var createCmd = new CreatePostCommand("Author's Post", "Content");
+        var createCmd = new CreatePostCommand(null, "Author's Post", "Content");
         var createResp = await _client.PostAsJsonAsync("/api/posts", createCmd);
         var postId = await createResp.Content.ReadFromJsonAsync<Guid>();
 

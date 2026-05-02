@@ -27,7 +27,7 @@ public class CreatePostHandlerTests
         var userId = Guid.NewGuid();
         _mockCurrentUserService.Setup(x => x.UserId).Returns(userId);
 
-        var command = new CreatePostCommand("Test Title", "Test Content");
+        var command = new CreatePostCommand(null, "Test Title", "Test Content");
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -46,7 +46,7 @@ public class CreatePostHandlerTests
         // Arrange
         _mockCurrentUserService.Setup(x => x.UserId).Returns((Guid?)null);
 
-        var command = new CreatePostCommand("Test Title", "Test Content");
+        var command = new CreatePostCommand(null, "Test Title", "Test Content");
 
         // Act
         var act = () => _handler.Handle(command, CancellationToken.None);

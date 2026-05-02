@@ -12,7 +12,7 @@ public class PostValidatorsTests
     {
         // Arrange
         var validator = new CreatePostCommandValidator();
-        var command = new CreatePostCommand("", "Valid Content", "category-1");
+        var command = new CreatePostCommand(null, "", "Valid Content", "category-1");
 
         // Act
         var result = validator.TestValidate(command);
@@ -26,7 +26,7 @@ public class PostValidatorsTests
     {
         // Arrange
         var validator = new CreatePostCommandValidator();
-        var command = new CreatePostCommand("Valid Title", "", "category-1");
+        var command = new CreatePostCommand(null, "Valid Title", "", "category-1");
 
         // Act
         var result = validator.TestValidate(command);
