@@ -1,6 +1,6 @@
-<![CDATA[<div align="center">
+<div align="center">
 
-# 🚀 Blog API
+# 🚀 FloraCore
 
 ### Enterprise-Grade .NET 9 REST API Boilerplate
 
@@ -485,4 +485,3 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 *Clean Architecture · CQRS · Domain-Driven Design*
 
 </div>
-]]>
