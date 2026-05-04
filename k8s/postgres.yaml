@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: postgres-pvc
+  name: floracore-db-pvc
 spec:
   accessModes:
     - ReadWriteOnce
@@ -12,26 +12,26 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: blog-db-deployment
+  name: floracore-db-deployment
 spec:
   selector:
     matchLabels:
-      app: blog-db
+      app: floracore-db
   template:
     metadata:
       labels:
-        app: blog-db
+        app: floracore-db
     spec:
       containers:
       - name: postgres
         image: postgres:16-alpine
         env:
         - name: POSTGRES_DB
-          value: blog_db
+          value: floracore_db
         - name: POSTGRES_USER
-          value: db_user
+          value: flora_user
         - name: POSTGRES_PASSWORD
-          value: db_password
+          value: flora_password
         ports:
         - containerPort: 5432
         volumeMounts:
@@ -40,15 +40,15 @@ spec:
       volumes:
       - name: postgres-storage
         persistentVolumeClaim:
-          claimName: postgres-pvc
+          claimName: floracore-db-pvc
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: blog-db-service
+  name: floracore-db-service
 spec:
   selector:
-    app: blog-db
+    app: floracore-db
   ports:
     - protocol: TCP
       port: 5432

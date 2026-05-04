@@ -24,7 +24,11 @@ public class SecurityHeadersMiddleware
         context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
 
         // 5. Chính sách bảo mật nội dung cơ bản (Có thể tùy chỉnh thêm tùy theo nhu cầu FE)
-        context.Response.Headers.Append("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none';");
+        // Bỏ qua CSP cho giao diện Scalar Docs vì nó cần sử dụng inline-script và inline-style
+        if (!context.Request.Path.StartsWithSegments("/scalar"))
+        {
+            context.Response.Headers.Append("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-ancestors 'none';");
+        }
 
         // 6. Ép buộc sử dụng HTTPS (HSTS) - Chỉ nên bật ở Production
         if (!context.Request.Host.Host.Contains("localhost"))

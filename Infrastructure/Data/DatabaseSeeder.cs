@@ -218,7 +218,7 @@ public class DatabaseSeeder
                 Content = "Để hoa tươi lâu, bạn cần thay nước mỗi ngày và cắt gốc hoa theo chiều chéo để hút nước tốt hơn...",
                 AuthorId = adminUser.Id,
                 CreatedAt = DateTime.UtcNow,
-                CategoryId = "flower-care"
+                CategoryId = "blog"
             },
             new Post
             {
@@ -227,7 +227,7 @@ public class DatabaseSeeder
                 Content = "Hoa hồng đỏ tượng trưng cho tình yêu nồng cháy, trong khi hoa baby trắng lại mang ý nghĩa tình yêu tinh khôi...",
                 AuthorId = adminUser.Id,
                 CreatedAt = DateTime.UtcNow,
-                CategoryId = "flower-meaning"
+                CategoryId = "blog"
             },
             new Post
             {
@@ -236,7 +236,7 @@ public class DatabaseSeeder
                 Content = "Năm 2026, các tone màu vintage và sự tối giản trong thiết kế hoa cầm tay cô dâu sẽ lên ngôi...",
                 AuthorId = adminUser.Id,
                 CreatedAt = DateTime.UtcNow,
-                CategoryId = "wedding-trends"
+                CategoryId = "intro"
             }
         });
         await _context.SaveChangesAsync();
