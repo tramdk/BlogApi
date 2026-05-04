@@ -146,23 +146,35 @@ public static class ServiceCollectionExtensions
         {
             options.AddPolicy(policyName, policy =>
             {
+                var allowedOrigins = new List<string>();
+
+                // 1. Check for a comma-separated list in "AllowedOrigins" (Best for Prod)
+                var originsConfig = configuration["AllowedOrigins"];
+                if (!string.IsNullOrEmpty(originsConfig))
+                {
+                    allowedOrigins.AddRange(originsConfig.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(o => o.Trim().TrimEnd('/')));
+                }
+
+                // 2. Backward compatibility with existing config keys
                 var angularUrl = configuration["AngularApp:Url"];
                 var reactUrl = configuration["ReactApp:Url"];
-                var allowedOrigins = new List<string>();
                 
-                if (!string.IsNullOrEmpty(angularUrl)) allowedOrigins.Add(angularUrl.TrimEnd('/'));
-                if (!string.IsNullOrEmpty(reactUrl)) allowedOrigins.Add(reactUrl.TrimEnd('/'));
+                if (!string.IsNullOrEmpty(angularUrl)) allowedOrigins.Add(angularUrl.Trim().TrimEnd('/'));
+                if (!string.IsNullOrEmpty(reactUrl)) allowedOrigins.Add(reactUrl.Trim().TrimEnd('/'));
+
+                // 3. Add the specific Vercel origin reported by the user
+                allowedOrigins.Add("https://tiemhoachinchin.vercel.app");
 
                 if (allowedOrigins.Any())
                 {
-                    policy.WithOrigins(allowedOrigins.ToArray())
+                    policy.WithOrigins(allowedOrigins.Distinct().ToArray())
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();
                 }
                 else
                 {
-                    // Fallback for local development when origins are not configured
+                    // Fallback for local development
                     policy.WithOrigins(
                               "http://localhost:3000",
                               "http://localhost:4200",

@@ -96,9 +96,12 @@ builder.Services.AddApiVersioning(options =>
 var app = builder.Build();
 
 // ========== Configure Middleware Pipeline ==========
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseRouting();
+app.UseCors(FloraCore.Application.Common.Constants.CorsConstants.AllowFrontend);
+
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseResponseCompression();
-app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseHealthChecks("/health");
 
@@ -111,8 +114,6 @@ app.MapScalarApiReference(options =>
            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
 });
 
-app.UseRouting();
-app.UseCors(FloraCore.Application.Common.Constants.CorsConstants.AllowFrontend);
 
 if (!app.Environment.IsEnvironment("Testing"))
 {
