@@ -38,37 +38,38 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
-            // Remove the existing DbContext registration
-            var descriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
+            // Remove the existing DbContext registration and options
+            var descriptors = services.Where(
+                d => d.ServiceType == typeof(DbContextOptions<AppDbContext>) || 
+                     d.ServiceType == typeof(AppDbContext) ||
+                     d.ServiceType.FullName?.Contains("EntityFrameworkCore") == true).ToList();
             
-            if (descriptor != null)
+            foreach (var d in descriptors)
             {
-                services.Remove(descriptor);
-            }
-
-            // Remove existing connection registration if any
-            var dbConnectionDescriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(DbConnection));
-            if (dbConnectionDescriptor != null)
-            {
-                services.Remove(dbConnectionDescriptor);
+                services.Remove(d);
             }
 
             // Add SQLite in-memory database for testing using the persistent connection
-            services.AddDbContext<AppDbContext>((container, options) =>
+            services.AddDbContext<AppDbContext>(options =>
             {
                 options.UseSqlite(_connection);
+                // Suppress the warning for pending model changes in tests
+                #pragma warning disable EF1001
+                options.ConfigureWarnings(x => x.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+                #pragma warning restore EF1001
             });
 
-            // Build service provider to ensure database is created
+            // Ensure database is created and seeded
             var sp = services.BuildServiceProvider();
-            
-            using var scope = sp.CreateScope();
-            var scopedServices = scope.ServiceProvider;
-            var db = scopedServices.GetRequiredService<AppDbContext>();
-            
-            db.Database.EnsureCreated();
+            using (var scope = sp.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                db.Database.EnsureCreated();
+                
+                // We also need to manually seed because Program.cs skips it in Testing
+                var seeder = ActivatorUtilities.CreateInstance<DatabaseSeeder>(scope.ServiceProvider);
+                seeder.SeedAsync().GetAwaiter().GetResult();
+            }
 
             // Override IFileService with FakeFileService
             services.AddScoped<IFileService, BlogApi.Tests.Mocks.FakeFileService>();

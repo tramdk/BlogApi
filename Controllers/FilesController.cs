@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
+using Asp.Versioning;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,7 +17,8 @@ namespace BlogApi.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class FilesController : ControllerBase
 {
     private readonly IFileService _fileService;

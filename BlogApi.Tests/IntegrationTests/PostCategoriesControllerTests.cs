@@ -16,11 +16,11 @@ public class PostCategoriesControllerTests : BaseIntegrationTest
     {
         // Search for existing admin or register one
         var loginCommand = new LoginCommand("admin@blogapi.com", "Admin123!");
-        var response = await _client.PostAsJsonAsync("/api/auth/login", loginCommand);
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginCommand);
         
         if (response.StatusCode == HttpStatusCode.OK)
         {
-            var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+            var result = await GetResponseDataAsync<LoginResponse>(response);
             return result!.AccessToken;
         }
 
@@ -34,11 +34,11 @@ public class PostCategoriesControllerTests : BaseIntegrationTest
     public async Task GetAll_ReturnsDefaultCategories()
     {
         // Act
-        var response = await _client.GetAsync("/api/postcategories");
+        var response = await _client.GetAsync("/api/v1/postcategories");
 
         // Assert
         response.EnsureSuccessStatusCode();
-        var categories = await response.Content.ReadFromJsonAsync<List<PostCategoryDto>>();
+        var categories = await GetResponseDataAsync<List<PostCategoryDto>>(response);
         
         Assert.NotNull(categories);
         Assert.Contains(categories, c => c.Id == "blog");
@@ -50,11 +50,11 @@ public class PostCategoriesControllerTests : BaseIntegrationTest
     public async Task GetById_ReturnsCategory()
     {
         // Act
-        var response = await _client.GetAsync("/api/postcategories/blog");
+        var response = await _client.GetAsync("/api/v1/postcategories/blog");
 
         // Assert
         response.EnsureSuccessStatusCode();
-        var category = await response.Content.ReadFromJsonAsync<PostCategoryDto>();
+        var category = await GetResponseDataAsync<PostCategoryDto>(response);
         Assert.NotNull(category);
         Assert.Equal("blog", category.Id);
     }

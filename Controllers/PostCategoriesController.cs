@@ -3,13 +3,15 @@ using BlogApi.Application.Features.PostCategories.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace BlogApi.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class PostCategoriesController : ControllerBase
 {
     private readonly IMediator _mediator;

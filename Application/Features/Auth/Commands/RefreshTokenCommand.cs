@@ -5,6 +5,7 @@ using BlogApi.Domain.Entities;
 using BlogApi.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
 using System.Threading;
@@ -19,12 +20,18 @@ public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, AuthResp
 {
     private readonly IJwtService _jwtService;
     private readonly IGenericRepository<RefreshToken, Guid> _refreshTokenRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly UserManager<AppUser> _userManager;
 
-    public RefreshTokenHandler(IJwtService jwtService, IGenericRepository<RefreshToken, Guid> refreshTokenRepository, UserManager<AppUser> userManager)
+    public RefreshTokenHandler(
+        IJwtService jwtService,
+        IGenericRepository<RefreshToken, Guid> refreshTokenRepository,
+        IUnitOfWork unitOfWork,
+        UserManager<AppUser> userManager)
     {
         _jwtService = jwtService;
         _refreshTokenRepository = refreshTokenRepository;
+        _unitOfWork = unitOfWork;
         _userManager = userManager;
     }
 
@@ -37,8 +44,24 @@ public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, AuthResp
         var refreshTokens = await _refreshTokenRepository.FindAsync(x => x.Token == request.RefreshToken && x.UserId == userId);
         var savedRefreshToken = refreshTokens.FirstOrDefault();
 
-        if (savedRefreshToken == null || savedRefreshToken.IsRevoked || savedRefreshToken.ExpiryDate <= DateTime.UtcNow)
+        if (savedRefreshToken == null)
             throw new UnauthorizedAccessException("Invalid refresh token");
+
+        // DETECTION: If token is already used or revoked → possible reuse attack!
+        if (savedRefreshToken.IsUsed || savedRefreshToken.IsRevoked)
+        {
+            // Bulk revoke all tokens for this user — single SQL UPDATE instead of N queries
+            await _refreshTokenRepository.GetQueryable()
+                .Where(t => t.UserId == userId && !t.IsRevoked)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(t => t.IsRevoked, true),
+                    cancellationToken);
+
+            throw new UnauthorizedAccessException("Refresh token reuse detected! All tokens revoked for security.");
+        }
+
+        if (savedRefreshToken.IsExpired)
+            throw new UnauthorizedAccessException("Refresh token expired");
 
         var user = await _userManager.FindByIdAsync(userIdStr);
         if (user == null) throw new UnauthorizedAccessException("User not found");
@@ -47,17 +70,21 @@ public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, AuthResp
         var (newToken, newJti) = _jwtService.GenerateAccessToken(user, roles);
         var newRefreshTokenStr = _jwtService.GenerateRefreshToken();
 
-        savedRefreshToken.IsRevoked = true; // Rotation: Revoke old one
+        // ROTATION: Mark old as used, add new token — commit both atomically
+        savedRefreshToken.IsUsed = true;
+        savedRefreshToken.ReplacedByToken = newRefreshTokenStr;
         await _refreshTokenRepository.UpdateAsync(savedRefreshToken);
-        
-        await _refreshTokenRepository.AddAsync(new RefreshToken
+
+        var newRefreshToken = new RefreshToken
         {
             Id = Guid.NewGuid(),
             Token = newRefreshTokenStr,
             Jti = newJti,
             ExpiryDate = DateTime.UtcNow.AddDays(7),
-            UserId = userId
-        });
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _refreshTokenRepository.AddAsync(newRefreshToken);
 
         var userDto = new UserDto
         {

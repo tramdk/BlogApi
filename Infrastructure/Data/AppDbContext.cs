@@ -22,6 +22,7 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<FileMetadata> FileMetadata => Set<FileMetadata>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

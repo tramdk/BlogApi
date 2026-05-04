@@ -32,19 +32,42 @@ public interface IGenericRepository<TEntity, TKey> where TEntity : class
     Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate);
     
     /// <summary>
-    /// Add new entity
+    /// Add new entity and immediately persist to database.
     /// </summary>
     Task AddAsync(TEntity entity);
-    
+
     /// <summary>
-    /// Update existing entity
+    /// Stage a new entity for insertion WITHOUT calling SaveChanges.
+    /// Use with IUnitOfWork for atomic multi-step operations.
+    /// </summary>
+    Task StageAddAsync(TEntity entity);
+
+    /// <summary>
+    /// Stage multiple entities for insertion WITHOUT calling SaveChanges.
+    /// </summary>
+    Task StageAddRangeAsync(IEnumerable<TEntity> entities);
+
+    /// <summary>
+    /// Update existing entity and immediately persist to database.
     /// </summary>
     Task UpdateAsync(TEntity entity);
-    
+
     /// <summary>
-    /// Delete entity
+    /// Stage an update WITHOUT calling SaveChanges.
+    /// Use with IUnitOfWork for atomic multi-step operations.
+    /// </summary>
+    void StageUpdate(TEntity entity);
+
+    /// <summary>
+    /// Delete entity and immediately persist to database.
     /// </summary>
     Task DeleteAsync(TEntity entity);
+
+    /// <summary>
+    /// Stage a deletion WITHOUT calling SaveChanges.
+    /// Use with IUnitOfWork for atomic multi-step operations.
+    /// </summary>
+    void StageDelete(TEntity entity);
     
     /// <summary>
     /// Get queryable for custom queries

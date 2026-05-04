@@ -29,6 +29,7 @@ public class GetPostDetailHandler(IGenericRepository<Post, Guid> postRepository)
         var options = new QueryOptionsBuilder<Post>()
             .WithFilter(p => p.Id == request.Id)
             .WithInclude(p => p.Author)
+            .AsNoTracking()
             .Build();
 
         var post = await _postRepository.GetSingleWithOptionsAsync(options);

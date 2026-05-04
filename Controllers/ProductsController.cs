@@ -8,6 +8,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Asp.Versioning;
+
 namespace BlogApi.Controllers;
 
 /// <summary>
@@ -15,7 +17,8 @@ namespace BlogApi.Controllers;
 /// </summary>
 /// <param name="mediator">The mediator instance for handling commands and queries.</param>
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class ProductsController(IMediator mediator) : ControllerBase
 {
     private readonly IMediator _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));

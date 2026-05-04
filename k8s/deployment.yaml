@@ -21,7 +21,7 @@ spec:
         image: blogapi:local
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8080 # ASP.NET Core 8.0+ dùng port 8080 mặc định cho non-root
+        - containerPort: 8080 # ASP.NET Core 9.0 dùng port 8080 mặc định cho non-root
         
         envFrom:
         - configMapRef:

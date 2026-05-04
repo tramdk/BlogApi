@@ -1,4 +1,4 @@
-﻿using BlogApi.Domain.Entities;
+using BlogApi.Domain.Entities;
 using BlogApi.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +23,7 @@ public class GetPostCategoriesQueryHandler : IRequestHandler<GetPostCategoriesQu
     public async Task<List<PostCategoryDto>> Handle(GetPostCategoriesQuery request, CancellationToken cancellationToken)
     {
         var categories = await _repository.GetQueryable()
+            .AsNoTracking()
             .OrderBy(c => c.Name)
             .Select(c => new PostCategoryDto
             {

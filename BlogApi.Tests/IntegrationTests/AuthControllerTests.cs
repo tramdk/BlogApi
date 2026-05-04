@@ -18,7 +18,7 @@ public class AuthControllerTests : BaseIntegrationTest
         var command = new LoginCommand("wrong@email.com", "wrongpassword");
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/auth/login", command);
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/login", command);
 
         // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -29,25 +29,25 @@ public class AuthControllerTests : BaseIntegrationTest
     {
         // 1. Register
         var regCmd = new RegisterCommand("unique_flow@test.com", "Password123!", "Flow User");
-        var regResp = await _client.PostAsJsonAsync("/api/auth/register", regCmd);
+        var regResp = await _client.PostAsJsonAsync("/api/v1/auth/register", regCmd);
         Assert.Equal(HttpStatusCode.OK, regResp.StatusCode);
 
         // 2. Login
         var loginCmd = new LoginCommand("unique_flow@test.com", "Password123!");
-        var loginResp = await _client.PostAsJsonAsync("/api/auth/login", loginCmd);
-        var authRes = await loginResp.Content.ReadFromJsonAsync<AuthResponse>();
+        var loginResp = await _client.PostAsJsonAsync("/api/v1/auth/login", loginCmd);
+        var authRes = await GetResponseDataAsync<AuthResponse>(loginResp);
         Assert.NotNull(authRes?.AccessToken);
 
         // 3. Refresh
         var refreshCmd = new RefreshTokenCommand(authRes!.AccessToken, authRes.RefreshToken);
-        var refreshResp = await _client.PostAsJsonAsync("/api/auth/refresh", refreshCmd);
+        var refreshResp = await _client.PostAsJsonAsync("/api/v1/auth/refresh", refreshCmd);
         Assert.Equal(HttpStatusCode.OK, refreshResp.StatusCode);
-        var newAuthRes = await refreshResp.Content.ReadFromJsonAsync<AuthResponse>();
+        var newAuthRes = await GetResponseDataAsync<AuthResponse>(refreshResp);
         Assert.NotEqual(authRes.AccessToken, newAuthRes!.AccessToken);
 
         // 4. Logout
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", newAuthRes.AccessToken);
-        var logoutResp = await _client.PostAsJsonAsync("/api/auth/logout", new { });
+        var logoutResp = await _client.PostAsJsonAsync("/api/v1/auth/logout", new { });
         Assert.Equal(HttpStatusCode.OK, logoutResp.StatusCode);
     }
 

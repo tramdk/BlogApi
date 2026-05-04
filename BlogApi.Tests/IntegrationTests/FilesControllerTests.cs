@@ -14,11 +14,11 @@ public class FilesControllerTests : BaseIntegrationTest
     private async Task<string> GetTokenAsync(string email)
     {
         var regCmd = new RegisterCommand(email, "Password123!", "File User");
-        await _client.PostAsJsonAsync("/api/auth/register", regCmd);
+        await _client.PostAsJsonAsync("/api/v1/auth/register", regCmd);
 
         var loginCmd = new LoginCommand(email, "Password123!");
-        var loginResp = await _client.PostAsJsonAsync("/api/auth/login", loginCmd);
-        var authRes = await loginResp.Content.ReadFromJsonAsync<AuthResponse>();
+        var loginResp = await _client.PostAsJsonAsync("/api/v1/auth/login", loginCmd);
+        var authRes = await GetResponseDataAsync<AuthResponse>(loginResp);
         return authRes!.AccessToken;
     }
 
@@ -39,18 +39,18 @@ public class FilesControllerTests : BaseIntegrationTest
         content.Add(new StringContent("true"), "isPublic");
 
         // Act - Upload
-        var uploadResp = await _client.PostAsync("/api/files/upload", content);
+        var uploadResp = await _client.PostAsync("/api/v1/files/upload", content);
         
         // Assert - Upload
         Assert.Equal(HttpStatusCode.OK, uploadResp.StatusCode);
-        var fileInfo = await uploadResp.Content.ReadFromJsonAsync<FileResponse>();
+        var fileInfo = await GetResponseDataAsync<FileResponse>(uploadResp);
         Assert.NotNull(fileInfo);
         Assert.Equal("testfile.jpg", fileInfo!.FileName);
         Assert.Contains("cloudinary.com", fileInfo.ViewUrl);
         Assert.Contains("cloudinary.com", fileInfo.DownloadUrl);
         
         // Act - Download
-        var downloadResp = await _client.GetAsync($"/api/files/download/{fileInfo.Id}");
+        var downloadResp = await _client.GetAsync($"/api/v1/files/download/{fileInfo.Id}");
 
         // Assert - Download
         Assert.Equal(HttpStatusCode.OK, downloadResp.StatusCode);
@@ -71,13 +71,13 @@ public class FilesControllerTests : BaseIntegrationTest
         content.Add(new StringContent("S1"), "objectId");
         content.Add(new StringContent("false"), "isPublic");
 
-        var uploadResp = await _client.PostAsync("/api/files/upload", content);
-        var fileInfo = await uploadResp.Content.ReadFromJsonAsync<FileResponse>();
+        var uploadResp = await _client.PostAsync("/api/v1/files/upload", content);
+        var fileInfo = await GetResponseDataAsync<FileResponse>(uploadResp);
 
         // Act - User B tries to download
         var tokenB = await GetTokenAsync("userB@test.com");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenB);
-        var downloadResp = await _client.GetAsync($"/api/files/download/{fileInfo!.Id}");
+        var downloadResp = await _client.GetAsync($"/api/v1/files/download/{fileInfo!.Id}");
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, downloadResp.StatusCode);
@@ -98,13 +98,13 @@ public class FilesControllerTests : BaseIntegrationTest
         content.Add(new StringContent("P1"), "objectId");
         content.Add(new StringContent("true"), "isPublic");
 
-        var uploadResp = await _client.PostAsync("/api/files/upload", content);
-        var fileInfo = await uploadResp.Content.ReadFromJsonAsync<FileResponse>();
+        var uploadResp = await _client.PostAsync("/api/v1/files/upload", content);
+        var fileInfo = await GetResponseDataAsync<FileResponse>(uploadResp);
 
         // Act - User B tries to download
         var tokenB = await GetTokenAsync("userPublicB@test.com");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenB);
-        var downloadResp = await _client.GetAsync($"/api/files/download/{fileInfo!.Id}");
+        var downloadResp = await _client.GetAsync($"/api/v1/files/download/{fileInfo!.Id}");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, downloadResp.StatusCode);
@@ -124,11 +124,11 @@ public class FilesControllerTests : BaseIntegrationTest
         content.Add(new StringContent("DeleteTest"), "objectType");
         content.Add(new StringContent("del1"), "objectId");
 
-        var uploadResp = await _client.PostAsync("/api/files/upload", content);
-        var fileInfo = await uploadResp.Content.ReadFromJsonAsync<FileResponse>();
+        var uploadResp = await _client.PostAsync("/api/v1/files/upload", content);
+        var fileInfo = await GetResponseDataAsync<FileResponse>(uploadResp);
 
         // Act
-        var deleteResp = await _client.DeleteAsync($"/api/files/{fileInfo!.Id}");
+        var deleteResp = await _client.DeleteAsync($"/api/v1/files/{fileInfo!.Id}");
 
         // Assert
         Assert.Equal(HttpStatusCode.NoContent, deleteResp.StatusCode);

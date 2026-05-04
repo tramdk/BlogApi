@@ -2,6 +2,7 @@ using BlogApi.Application.Features.Auth.Commands;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Asp.Versioning;
 
 namespace BlogApi.Controllers;
 
@@ -10,7 +11,8 @@ namespace BlogApi.Controllers;
 /// </summary>
 /// <param name="mediator">The mediator instance for handling commands and queries.</param>
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class AuthController(IMediator mediator) : ControllerBase
 {
     private readonly IMediator _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));

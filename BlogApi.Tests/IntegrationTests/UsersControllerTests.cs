@@ -16,11 +16,11 @@ public class UsersControllerTests : BaseIntegrationTest
     private async Task<string> GetTokenAsync(string email = "test@example.com", string password = "Password123!")
     {
         var registerCommand = new RegisterCommand(email, password, "Test User");
-        await _client.PostAsJsonAsync("/api/auth/register", registerCommand);
+        await _client.PostAsJsonAsync("/api/v1/auth/register", registerCommand);
 
         var loginCommand = new LoginCommand(email, password);
-        var response = await _client.PostAsJsonAsync("/api/auth/login", loginCommand);
-        var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginCommand);
+        var result = await GetResponseDataAsync<LoginResponse>(response);
         return result!.AccessToken;
     }
 
@@ -28,11 +28,11 @@ public class UsersControllerTests : BaseIntegrationTest
     {
         // Register with Admin role (seeded roles allow this in test env)
         var registerCommand = new RegisterCommand("admin-users-test@example.com", "AdminPass123!", "Admin User", "Admin");
-        await _client.PostAsJsonAsync("/api/auth/register", registerCommand);
+        await _client.PostAsJsonAsync("/api/v1/auth/register", registerCommand);
 
         var loginCommand = new LoginCommand("admin-users-test@example.com", "AdminPass123!");
-        var response = await _client.PostAsJsonAsync("/api/auth/login", loginCommand);
-        var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginCommand);
+        var result = await GetResponseDataAsync<LoginResponse>(response);
         return result!.AccessToken;
     }
 
@@ -45,7 +45,7 @@ public class UsersControllerTests : BaseIntegrationTest
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var command = new CreateUserCommand("newuser-admin@example.com", "Password123!", "New User");
-        var response = await _client.PostAsJsonAsync("/api/users", command);
+        var response = await _client.PostAsJsonAsync("/api/v1/users", command);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
@@ -57,7 +57,7 @@ public class UsersControllerTests : BaseIntegrationTest
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var command = new CreateUserCommand("blocked@example.com", "Password123!", "Blocked User");
-        var response = await _client.PostAsJsonAsync("/api/users", command);
+        var response = await _client.PostAsJsonAsync("/api/v1/users", command);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -68,10 +68,10 @@ public class UsersControllerTests : BaseIntegrationTest
         var token = await GetAdminTokenAsync();
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await _client.GetAsync("/api/users");
+        var response = await _client.GetAsync("/api/v1/users");
 
         response.EnsureSuccessStatusCode();
-        var result = await response.Content.ReadFromJsonAsync<PagedResult<UserDto>>();
+        var result = await GetResponseDataAsync<PagedResult<UserDto>>(response);
         Assert.NotNull(result);
     }
 
@@ -81,7 +81,7 @@ public class UsersControllerTests : BaseIntegrationTest
         var token = await GetTokenAsync("regular-list@example.com");
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await _client.GetAsync("/api/users");
+        var response = await _client.GetAsync("/api/v1/users");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -94,12 +94,12 @@ public class UsersControllerTests : BaseIntegrationTest
 
         // Admin creates a user first
         var createCmd = new CreateUserCommand("todelete-admin@example.com", "Password123!", "To Delete");
-        var createResponse = await _client.PostAsJsonAsync("/api/users", createCmd);
+        var createResponse = await _client.PostAsJsonAsync("/api/v1/users", createCmd);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
-        var userId = await createResponse.Content.ReadFromJsonAsync<Guid>();
+        var userId = await GetResponseDataAsync<Guid>(createResponse);
 
         // Then deletes it
-        var deleteResponse = await _client.DeleteAsync($"/api/users/{userId}");
+        var deleteResponse = await _client.DeleteAsync($"/api/v1/users/{userId}");
 
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
     }

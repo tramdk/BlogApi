@@ -7,11 +7,14 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Asp.Versioning;
+
 namespace BlogApi.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class ChatController : ControllerBase
 {
     private readonly IMediator _mediator;

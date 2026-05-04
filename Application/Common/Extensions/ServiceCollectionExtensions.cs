@@ -5,8 +5,6 @@ using BlogApi.Application.Common.Behaviors;
 using BlogApi.Application.Common.Interfaces;
 using BlogApi.Application.Common.Services;
 using BlogApi.Domain.Entities;
-using BlogApi.Infrastructure.Data;
-using BlogApi.Infrastructure.Repositories;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -24,66 +22,6 @@ namespace BlogApi.Application.Common.Extensions;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// Add Database Context and Identity services. Supports SqlServer and PostgreSQL.
-    /// </summary>
-    public static IServiceCollection AddDatabaseServices(this IServiceCollection services, IConfiguration configuration)
-    {
-        var databaseProvider = configuration["DatabaseProvider"] ?? "SqlServer";
-        var connectionString = configuration.GetConnectionString(ConfigurationKeys.DefaultConnection);
-
-        services.AddDbContext<AppDbContext>(options =>
-        {
-            if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
-            {
-                // Validate if connection string is actually for SQL Server (happens when Env Var is missing)
-                if (connectionString != null && (connectionString.Contains("Trusted_Connection") || connectionString.Contains("MultipleActiveResultSets")))
-                {
-                    throw new InvalidOperationException("CRITICAL CONFIG ERROR: DatabaseProvider is 'PostgreSQL' but ConnectionString looks like SQL Server. " +
-                        "Did you forget to set the Environment Variable 'ConnectionStrings__DefaultConnection' on Render? (Note the DOUBLE underscore).");
-                }
-                // Auto-fix Render/Cloud URI format
-                if (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://"))
-                {
-                    try 
-                    {
-                        Console.WriteLine($"[Config] Check: Detected Postgres URI format. Attempting conversion...");
-                        var uri = new Uri(connectionString);
-                        var userInfo = uri.UserInfo.Split(':');
-                        var builder = new Npgsql.NpgsqlConnectionStringBuilder
-                        {
-                            Host = uri.Host,
-                            Port = uri.Port > 0 ? uri.Port : 5432,
-                            Database = uri.AbsolutePath.Trim('/'),
-                            Username = userInfo.Length > 0 ? userInfo[0] : string.Empty,
-                            Password = userInfo.Length > 1 ? userInfo[1] : string.Empty,
-                            SslMode = Npgsql.SslMode.Require,
-                            TrustServerCertificate = true
-                        };
-                        connectionString = builder.ToString();
-                        Console.WriteLine($"[Config] Success: Converted URI to Npgsql format (Host={builder.Host}, DB={builder.Database})");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[Config] Error: Failed to parse Postgres URI. Details: {ex.Message}");
-                        // Fallback matches original behavior, will likely fail in Npgsql but errors are logged now.
-                    }
-                }
-
-                options.UseNpgsql(connectionString);
-            }
-            else
-            {
-                options.UseSqlServer(connectionString);
-            }
-        });
-
-        services.AddIdentity<AppUser, IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<AppDbContext>()
-            .AddDefaultTokenProviders();
-
-        return services;
-    }
 
     /// <summary>
     /// Add JWT Authentication services.
@@ -197,39 +135,7 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Add Infrastructure layer services (repositories, external services).
-    /// </summary>
-    public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
-    {
-        // Unit of Work & Repositories
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
-        services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
-        services.AddScoped<IPostQueryService, PostQueryService>();
 
-        // Core Services
-        services.AddSingleton<IDateTimeService, BlogApi.Infrastructure.Services.DateTimeService>();
-        services.AddScoped<IJwtService, BlogApi.Infrastructure.Services.JwtService>();
-        services.AddScoped<ITokenBlacklistService, BlogApi.Infrastructure.Services.TokenBlacklistService>();
-        
-        // External Services
-        services.Configure<BlogApi.Application.Common.Models.CloudinarySettings>(configuration.GetSection("Cloudinary"));
-        services.AddScoped<INotificationService, BlogApi.Infrastructure.Services.NotificationService>();
-        services.AddScoped<IFileService, BlogApi.Infrastructure.Services.CloudinaryFileService>();
-        services.AddScoped<IChatService, BlogApi.Infrastructure.Services.ChatService>();
-
-        return services;
-    }
-
-    /// <summary>
-    /// Add SignalR services with User ID Provider.
-    /// </summary>
-    public static IServiceCollection AddSignalRServices(this IServiceCollection services)
-    {
-        services.AddSignalR();
-        services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, BlogApi.Infrastructure.Hubs.UserIdProvider>();
-        return services;
-    }
 
     /// <summary>
     /// Add CORS policy for frontend applications.

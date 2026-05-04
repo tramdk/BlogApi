@@ -1,314 +1,488 @@
-# 🚀 Blog API - Enterprise Grade .NET 8 Boilerplate
+<![CDATA[<div align="center">
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/your-username/blog-api/.github/workflows/dotnet.yml?branch=main&style=flat-square)
-![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
-![Platform](https://img.shields.io/badge/platform-.NET%208-purple?style=flat-square)
-![Docker](https://img.shields.io/badge/docker-ready-blue?style=flat-square)
-![Cloudinary](https://img.shields.io/badge/storage-Cloudinary-3448C5?style=flat-square&logo=cloudinary)
+# 🚀 Blog API
 
-> **A production-ready REST API** built with Clean Architecture, Domain-Driven Design (DDD), and CQRS principles. Designed for scalability, maintainability, and high performance.
+### Enterprise-Grade .NET 9 REST API Boilerplate
 
----
+[![.NET 9](https://img.shields.io/badge/.NET-9.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![EF Core](https://img.shields.io/badge/EF%20Core-9.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://learn.microsoft.com/en-us/ef/core/)
+[![Tests](https://img.shields.io/badge/tests-36%20passed-2ea44f?style=for-the-badge)](./BlogApi.Tests)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](./Dockerfile)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](./LICENSE)
 
-## 📑 Table of Contents
-1. [Architecture Overview](#-architecture-overview)
-2. [Technology Stack](#-technology-stack)
-3. [Key Features](#-key-features)
-4. [Getting Started](#-getting-started)
-5. [Configuration Guide](#-configuration-guide)
-6. [Developer Guide](#-developer-guide)
-7. [Deployment (Docker)](#-deployment)
-8. [Testing Strategy](#-testing-strategy)
+**Clean Architecture** · **CQRS** · **MediatR** · **Hybrid Cache** · **Outbox Pattern** · **OpenTelemetry**
+
+[Getting Started](#-getting-started) · [Architecture](#-architecture) · [API Reference](#-api-reference) · [Deployment](#-deployment)
+
+</div>
 
 ---
 
-## 🏗 Architecture Overview
+## ✨ Highlights
 
-The solution follows **Clean Architecture** principles, enforcing a strict dependency rule: **Dependencies only point inwards.**
+| Category | What's Inside |
+|----------|---------------|
+| 🏗️ **Architecture** | Clean Architecture + CQRS + Vertical Slices via MediatR |
+| ⚡ **Performance** | HybridCache (L1 Memory + L2 Redis), Brotli/Gzip compression, `.AsNoTracking()` |
+| 🔐 **Security** | JWT with Refresh Token Rotation & Reuse Detection, Security Headers, Data Masking |
+| 🛡️ **Resilience** | Polly (Retry + Circuit Breaker), Outbox Pattern, Hangfire background jobs |
+| 📊 **Observability** | Serilog structured logging, OpenTelemetry tracing, Health Checks |
+| 🧪 **Testing** | 36 Integration Tests, Architecture Tests, SQLite In-Memory |
+| 🐳 **DevOps** | Docker, Docker Compose, Kubernetes manifests, GitHub Actions CI |
 
-### 📦 Project Structure
+---
 
-| Project / Layer | Namespace | Responsibilities | Dependencies |
-|----------------|-----------|------------------|--------------|
-| **Domain** | `BlogApi.Domain` | Enterprise Logic, Entities, Value Objects. **Core of the system.** | *None* |
-| **Application** | `BlogApi.Application` | Use Cases (MediatR Handlers), DTOs, Interfaces, Validators. | `Domain` |
-| **Infrastructure** | `BlogApi.Infrastructure` | External concerns: Database (EF/Dapper), Cloudinary, Jwt. | `Application` |
-| **Presentation** | `BlogApi.Controllers` | API Endpoints, Filters, Middleware. | `Application` |
+## 🏗 Architecture
 
-### 📁 Folder Structure
+The project enforces a **strict dependency rule** — dependencies only flow inward.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    Presentation                          │
+│         Controllers · Filters · Middleware               │
+│                                                          │
+│   ┌──────────────────────────────────────────────────┐   │
+│   │                 Application                      │   │
+│   │    Features (CQRS) · Behaviors · Interfaces      │   │
+│   │                                                  │   │
+│   │   ┌──────────────────────────────────────────┐   │   │
+│   │   │              Domain                      │   │   │
+│   │   │     Entities · Value Objects · Errors    │   │   │
+│   │   └──────────────────────────────────────────┘   │   │
+│   └──────────────────────────────────────────────────┘   │
+│                                                          │
+│   ┌──────────────────────────────────────────────────┐   │
+│   │              Infrastructure                      │   │
+│   │   EF Core · Dapper · Redis · Cloudinary · JWT    │   │
+│   │   SignalR · Hangfire · OpenTelemetry             │   │
+│   └──────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────┘
+```
+
+### 📁 Project Structure
+
 ```text
-src/BlogApi
-├── Application/
-│   ├── Common/             # Shared Interfaces, Behaviors (Logging, Validation), Exceptions
-│   ├── Features/           # Vertical Slices (e.g. Posts, Auth) containing Commands/Queries
-│   └── Constants/          # System-wide Constants (No Magic Strings)
-├── Domain/
-│   ├── Entities/           # Core Entities (Post, User, FileMetadata)
-│   ├── ValueObjects/       # Immutable objects (Email, Money)
-│   └── Exceptions/         # Domain-specific Errors
-├── Infrastructure/
-│   ├── Data/               # DbContext, Migrations, Seeding
-│   ├── Repositories/       # Implementations of Repositories
-│   └── Services/           # Implementations of Interfaces (CloudinaryFileService, JwtService)
-└── Controllers/            # API Entry Points
+BlogApi/
+├── Application/                     # Use Cases Layer
+│   ├── Common/
+│   │   ├── Attributes/              # [Cacheable], [Authorize] custom attributes
+│   │   ├── Behaviors/               # MediatR Pipeline: Logging, Validation, Caching, Auth
+│   │   ├── Constants/               # No magic strings
+│   │   ├── Extensions/              # DI registration, Service extensions
+│   │   ├── Interfaces/              # Contracts (IGenericRepository, IUnitOfWork, etc.)
+│   │   └── Models/                  # ApiResponse<T>, QueryOptions, PagedResult
+│   └── Features/                    # Vertical Slices
+│       ├── Auth/                    # Login, Register, Refresh Token Rotation
+│       ├── Posts/                   # CRUD + Search + Rating
+│       ├── Products/                # E-commerce catalog
+│       ├── Cart/                    # Shopping cart
+│       ├── Chat/                    # Real-time messaging
+│       └── ...
+├── Domain/                          # Core Business Layer
+│   ├── Entities/                    # Post, AppUser, Product, RefreshToken, OutboxMessage
+│   └── Exceptions/                  # DomainException, EntityNotFoundException
+├── Infrastructure/                  # External Concerns
+│   ├── Data/                        # AppDbContext, Migrations, DatabaseSeeder, UnitOfWork
+│   ├── Repositories/                # GenericRepository, PostQueryService (Dapper)
+│   ├── Services/                    # JWT, Cloudinary, Notification, OutboxProcessor
+│   ├── Hubs/                        # SignalR: ChatHub, NotificationHub
+│   ├── Logging/                     # LogMaskingEnricher (Serilog data protection)
+│   └── Security/                    # HangfireDashboardAuthFilter
+├── Controllers/                     # 12 API Controllers (versioned: /api/v1/...)
+├── Middleware/                      # Exception Handling, Security Headers, Token Blacklist
+├── Filters/                         # ApiResponseFilter (auto-wrap responses)
+└── BlogApi.Tests/                   # Test Suite
+    ├── IntegrationTests/            # 7 test classes, 36 tests
+    ├── ArchitectureTests/           # Clean Architecture enforcement
+    └── Mocks/                       # FakeFileService
 ```
 
 ---
 
 ## 🛠 Technology Stack
 
-### Core
-- **.NET 8** (LTS) providing high-performance runtime.
-- **MediatR**: Implements Mediator pattern for decoupling features.
-- **AutoMapper v16.1**: Handles object-to-object mapping efficiently.
-- **FluentValidation**: Strong-typed validation rules.
+### Core Runtime
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **.NET** | 9.0 | Runtime & SDK |
+| **C#** | 13 | Language features |
+| **MediatR** | 12.4 | CQRS + Mediator pattern |
+| **FluentValidation** | 11.11 | Request validation pipeline |
+| **AutoMapper** | 16.1 | Object-to-object mapping |
 
-### Data Access
-- **SQL Server / PostgreSQL**: Multi-database support via configuration.
-- **Entity Framework Core 8**: Code-First ORM for Command operations (Write).
-- **Dapper**: Micro-ORM for high-performance Query operations (Read).
-- **SQLite**: Used for isolated Integration Tests.
+### Data & Caching
+| Technology | Purpose |
+|------------|---------|
+| **EF Core 9** | ORM for write operations (Code-First) |
+| **Dapper** | Micro-ORM for high-performance reads |
+| **SQL Server / PostgreSQL** | Multi-provider database support |
+| **HybridCache** | Native .NET 9 — L1 (Memory) + L2 (Redis) |
+| **Redis** | Distributed cache, rate limiting, session |
 
-### ☁️ File Storage
-- **Cloudinary**: Cloud-based file storage for all uploads. Files are stored and served directly from Cloudinary CDN, eliminating the need for server-side disk storage.
-- Package: `CloudinaryDotNet` (official SDK).
+### Security & Real-time
+| Technology | Purpose |
+|------------|---------|
+| **JWT + Refresh Token Rotation** | Auth with reuse detection & chain revocation |
+| **ASP.NET Core Identity** | User management, roles, claims |
+| **SignalR** | WebSocket for chat & notifications |
+| **AspNetCoreRateLimit** | IP-based request throttling |
 
-### Real-time & Security
-- **SignalR**: WebSocket support for real-time features.
-- **JWT (Reference Tokens)**: Secure authentication with support for centralized revocation (Blacklist).
-- **AspNetCoreRateLimit**: IP-based rate limiting to prevent abuse.
-
-### Documentation & logs
-- **Scalar**: Next-gen API documentation UI.
-- **Serilog**: Structured logging with file and console sinks.
+### Infrastructure & Observability
+| Technology | Purpose |
+|------------|---------|
+| **Serilog** | Structured logging + data masking |
+| **OpenTelemetry** | Distributed tracing |
+| **Hangfire** | Background job processing |
+| **Polly** | Retry + Circuit Breaker resilience |
+| **Cloudinary** | Cloud file storage & CDN |
+| **Scalar** | API documentation UI |
 
 ---
 
-## ✨ Key Features
+## 🔐 Security Architecture
 
-### 🔐 Security First
-- **Centralized Revocation**: Tokens can be blacklisted instantly (e.g., on logout or breach).
-- **IP Rate Limiting**: Protects login endpoints (`limit: 5/minute`) and general API (`limit: 100/minute`).
-- **Policy Authorization**: Granular permissions (e.g., "MustBeAuthor" policy).
-- **File Ownership**: Only the file owner can delete their files; private files are accessible only to their owner.
+```
+Request → Security Headers → Exception Handler → Rate Limiting
+       → JWT Authentication → Token Blacklist Check → Authorization
+       → MediatR Pipeline → [Logging → Validation → Caching → Auth → Handler]
+```
 
-### ☁️ Cloud File Storage
-- **Cloudinary Integration**: Files are uploaded directly to Cloudinary and served via CDN URLs.
-- **Zero Disk Usage**: No server-side `uploads/` folder required for file serving.
-- **Graceful Deletion**: If a file is already missing on Cloudinary, the database metadata is still cleaned up automatically.
-- **Secure CDN URLs**: `ViewUrl` and `DownloadUrl` in all file responses point directly to Cloudinary CDN.
+### Refresh Token Rotation & Reuse Detection
 
-### ⚡ Performance Optimized
-- **CQRS**: Separates Reads (Dapper) from Writes (EF Core).
-- **Pagination**: Efficient cursor-based or offset-based pagination.
-- **CDN**: Cloudinary CDN handles file delivery globally with low latency.
-- **Caching**: Redis distributed caching for rate limiting and session data.
+```
+Client                          Server
+  │                               │
+  │── Login ──────────────────────▶│ → Returns: AccessToken + RefreshToken_A
+  │                               │
+  │── Refresh (Token_A) ─────────▶│ → Marks Token_A as "used"
+  │◀── New AccessToken + Token_B ─│   Creates Token_B linked to Token_A
+  │                               │
+  │── Refresh (Token_A) ─────────▶│ ⚠️ REUSE DETECTED!
+  │◀── 401 + ALL tokens revoked ──│   Entire token chain invalidated
+```
 
-### 📝 Developer Experience
-- **No Manual Mapping**: AutoMapper handles boring mapping work.
-- **Unified Result**: Standardized API responses (Success/Fail wrappers).
-- **Development Seeding**: Auto-generates Admin user and sample data.
-- **Test-Friendly**: `FakeFileService` mock allows running all tests without Cloudinary credentials.
+### Security Headers (Auto-injected)
+
+| Header | Value |
+|--------|-------|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `X-XSS-Protection` | `1; mode=block` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Content-Security-Policy` | `default-src 'self'; frame-ancestors 'none'` |
+| `Strict-Transport-Security` | `max-age=31536000` *(production only)* |
+
+---
+
+## ⚡ Performance Features
+
+### HybridCache (Native .NET 9)
+
+```
+Request → L1 Memory Cache (μs) → L2 Redis (ms) → Database (10-50ms)
+              Cache Hit?              Cache Hit?        Execute Query
+                 ↓ Yes                   ↓ Yes              ↓
+             Return data           Return + Backfill L1   Store L1+L2
+```
+
+- **L1 hit**: ~microseconds (in-process memory)
+- **L2 hit**: ~1-5ms (Redis network hop)
+- **Cache miss**: full DB query, then populate both layers
+- **Stampede protection**: built-in locking prevents duplicate factory calls
+
+### Response Compression
+
+| Algorithm | Priority | Compression Ratio |
+|-----------|----------|-------------------|
+| **Brotli** | Primary | ~20-26% of original |
+| **Gzip** | Fallback | ~30-35% of original |
+
+Targeted MIME types: `application/json`, `text/plain`, `image/svg+xml`
+
+### EF Core Optimization
+
+- **`.AsNoTracking()`** on all read-only queries
+- **Bulk operations** via `ExecuteUpdateAsync` (no N+1)
+- **Split Queries** for complex includes
+- **UnitOfWork** with `Stage*` methods for atomic multi-step operations
+
+---
+
+## 🛡 Resilience & Reliability
+
+### Polly Pipeline: `external-services`
+
+```
+Request → Retry (3x, exponential + jitter) → Circuit Breaker → Execute
+                                                    │
+                                              Opens after 50%
+                                              failure in 30s window
+                                              (min 5 calls)
+                                                    │
+                                              Breaks for 15s
+```
+
+### Outbox Pattern
+
+```
+Handler Transaction:
+  1. Save Post to DB         ─┐
+  2. Save OutboxMessage to DB ─┘ ← Single atomic transaction
+
+Hangfire (every minute):
+  1. Read unprocessed OutboxMessages
+  2. Execute side-effect (Notification, Email, etc.)
+  3. Mark as processed
+  4. Retry failed messages (max 5 attempts)
+```
+
+---
+
+## 📡 API Reference
+
+### Authentication (`/api/v1/auth`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|:----:|-------------|
+| `POST` | `/register` | ❌ | Create new account |
+| `POST` | `/login` | ❌ | Get access + refresh tokens |
+| `POST` | `/refresh` | ❌ | Rotate refresh token |
+| `POST` | `/logout` | ✅ | Blacklist current token |
+
+### Posts (`/api/v1/posts`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|:----:|-------------|
+| `GET` | `/` | ❌ | List posts (cursor pagination) |
+| `GET` | `/{id}` | ❌ | Get post detail (cached 5min) |
+| `GET` | `/search` | ❌ | Search with filters |
+| `POST` | `/search` | ❌ | Search with complex filter model |
+| `POST` | `/` | ✅ | Create post |
+| `PUT` | `/{id}` | ✅ | Update post (owner only) |
+| `DELETE` | `/{id}` | ✅ | Delete post (owner only) |
+| `POST` | `/{id}/rate` | ✅ | Rate a post (1-5) |
+
+### Products (`/api/v1/products`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|:----:|-------------|
+| `GET` | `/` | ❌ | List products (paged) |
+| `GET` | `/{id}` | ❌ | Get product detail |
+| `POST` | `/` | ✅ | Create product |
+| `PUT` | `/{id}` | ✅ | Update product |
+| `DELETE` | `/{id}` | ✅ | Delete product |
+
+### Also available: Cart, Favorites, Chat, Notifications, Files, Users, Reviews, Categories
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- .NET 8 SDK
-- SQL Server (LocalDB or Docker)
-- A **Cloudinary** account ([cloudinary.com](https://cloudinary.com) — free tier is sufficient)
 
-### 1️⃣ Clone & Restore
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- SQL Server (LocalDB) or PostgreSQL
+- Redis *(optional — falls back to in-memory)*
+- [Cloudinary account](https://cloudinary.com) *(free tier is sufficient)*
+
+### Quick Start
+
 ```bash
+# 1. Clone
 git clone https://github.com/your-username/blog-api.git
 cd blog-api
+
+# 2. Configure
+cp .env.example .env
+# Edit .env with your credentials
+
+# 3. Restore & Run
 dotnet restore
+dotnet run
+
+# 4. Open API Docs
+# → http://localhost:5000/scalar/v1
 ```
 
-### 2️⃣ Configure Cloudinary
-Get your credentials from the [Cloudinary Dashboard](https://cloudinary.com/console). Add them to your `.env` file:
+### 🔑 Default Credentials
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | `admin@blogapi.com` | `Admin123!` |
+
+---
+
+## ⚙️ Configuration
+
+### Environment Variables (`.env`)
+
 ```bash
+# Database
+DB_PASSWORD=your_secure_password
+DatabaseProvider=SqlServer              # or "PostgreSQL"
+
+# JWT (CRITICAL: min 32 characters)
+JWT_SECRET=YourSuperSecretKeyWithAtLeast32Characters!
+
+# Cloudinary
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
+
+# Redis (optional)
+REDIS_CONNECTION=localhost:6379
 ```
 
-Or directly in `appsettings.json` (not recommended for production):
+### Multi-Database Support
+
+| Provider | Config Value | Use Case |
+|----------|-------------|----------|
+| SQL Server | `"SqlServer"` | Local development (default) |
+| PostgreSQL | `"PostgreSQL"` | Docker / Cloud deployment |
+
 ```json
-"Cloudinary": {
-  "CloudName": "your_cloud_name",
-  "ApiKey": "your_api_key",
-  "ApiSecret": "your_api_secret"
-}
+// appsettings.json
+{ "DatabaseProvider": "PostgreSQL" }
 ```
 
-### 3️⃣ Database Setup
-Ensure your connection string in `appsettings.json` is correct (`DefaultConnection`).
-```bash
-# Apply migrations and create database
-dotnet ef database update
-```
+### Rate Limiting
 
-### 4️⃣ Run Application
-```bash
-dotnet watch run --project BlogApi
-```
-- API URL: `https://localhost:7066`
-- Documentation: `https://localhost:7066/scalar/v1`
-
-### 🔑 Default Credentials
-- **Admin**: `admin@blogapi.com` / `Admin123!`
-- **User**: Register a new user via API.
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| `*` (all) | 100 requests | 1 minute |
+| `POST /auth/login` | 5 requests | 1 minute |
+| `POST /auth/register` | 3 requests | 1 minute |
+| `POST /auth/refresh` | 10 requests | 1 minute |
 
 ---
 
-## 🌍 Multi-Database Support
+## 🐳 Deployment
 
-Switch between **SQL Server** and **PostgreSQL** easily via configuration.
+### Docker Compose (Recommended)
 
-| Provider | Description |
-|----------|-------------|
-| `SqlServer` | Default for Local Development. Uses `Microsoft.EntityFrameworkCore.SqlServer`. |
-| `PostgreSQL` | Recommended for Docker/Render deployment. Uses `Npgsql.EntityFrameworkCore.PostgreSQL`. |
+```bash
+# Start all services (API + PostgreSQL + Redis)
+docker-compose up -d
 
-To switch, update `appsettings.json` or Environment Variables:
-```json
-"DatabaseProvider": "PostgreSQL"
+# Auto-rebuild on code changes
+docker-compose up --watch
+```
+
+### One-Click Deploy (Windows)
+
+```powershell
+.\deploy-docker.ps1
+```
+
+### Manual Docker
+
+```bash
+docker build -t blog-api .
+docker run -p 8080:8080 --env-file .env blog-api
+```
+
+### Kubernetes
+
+```bash
+kubectl apply -f k8s/
 ```
 
 ---
 
-## ⚙ Configuration Guide
+## 🧪 Testing
 
-The `appsettings.json` file controls the application behavior.
+```bash
+# Run all 36 tests
+dotnet test
 
-| Section | Key | Description |
-|---------|-----|-------------|
-| **ConnectionStrings** | `DefaultConnection` | Database connection string (SQL Server or PostgreSQL). |
-| | `Redis` | Redis connection (optional, falls back to in-memory). |
-| **Jwt** | `Secret` | **CRITICAL**: Must be 32+ chars. Used to sign tokens. |
-| | `ExpiryMinutes` | Token lifetime (default 60). |
-| **Cloudinary** | `CloudName` | Your Cloudinary cloud name. |
-| | `ApiKey` | Your Cloudinary API key. |
-| | `ApiSecret` | **CRITICAL**: Your Cloudinary API secret. Never commit to Git. |
-| **IpRateLimiting** | `GeneralRules` | Set global or endpoint-specific limits. |
+# Run specific test class
+dotnet test --filter "PostsControllerTests"
 
-### File API Endpoints
+# With verbosity
+dotnet test --logger "console;verbosity=detailed"
+```
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/files/upload` | ✅ Required | Upload a file to Cloudinary. Returns CDN URL. |
-| `POST` | `/api/files/metadata` | ❌ Public | Get file metadata by `objectId`. |
-| `GET` | `/api/files/download/{id}` | ❌ Public | Download file by ID (proxied from Cloudinary). |
-| `GET` | `/api/files/view/{id}` | ❌ Public | View file inline (proxied from Cloudinary). |
-| `GET` | `/api/files/view/object/{objectId}` | ❌ Public | View latest file for a given object. |
-| `DELETE` | `/api/files/{id}` | ✅ Required | Delete file from Cloudinary and remove metadata from DB. |
+### Test Infrastructure
+
+| Component | Implementation |
+|-----------|----------------|
+| **Framework** | xUnit 2.9 + VSTest 18 |
+| **Server** | `WebApplicationFactory<Program>` |
+| **Database** | SQLite In-Memory (persistent connection) |
+| **File Storage** | `FakeFileService` (no Cloudinary needed) |
+| **Auth** | Real JWT flow per test |
+
+### Test Coverage
+
+| Test Class | Tests | What It Covers |
+|-----------|:-----:|----------------|
+| `PostsControllerTests` | 7 | CRUD, search, pagination, rating, ownership |
+| `AuthControllerTests` | 4 | Register, login, refresh, token blacklisting |
+| `UsersControllerTests` | 5 | Profile, roles, admin operations |
+| `FilesControllerTests` | 6 | Upload, download, privacy, ownership deletion |
+| `PostCategoriesControllerTests` | 4 | CRUD for categories |
+| `ChatAndNotificationTests` | 3 | SignalR message flow, notification delivery |
+| `ArchitectureTests` | 7 | Dependency rule enforcement |
+
+---
+
+## 📋 MediatR Pipeline
+
+Every request flows through a configurable pipeline of cross-cutting concerns:
+
+```
+Request
+  → LoggingBehavior          # Logs entry/exit + duration
+  → ValidationBehavior       # FluentValidation rules
+  → AuthorizationBehavior    # Role/Policy checks
+  → CachingBehavior          # HybridCache (if [Cacheable])
+  → Handler                  # Business logic
+Response
+```
 
 ---
 
 ## 👨‍💻 Developer Guide
 
-### Adding a New Feature (Vertical Slice)
+### Adding a New Feature
 
-1.  **Define Domain**: Add Entity in `Domain/Entities`.
-2.  **Define Contract**: Create DTOs in `Application/Features/[Feature]/DTOs`.
-3.  **Implement Logic**:
-    - Create `Command` or `Query` record (MediatR).
-    - Implement `IRequestHandler`.
-    - Add `Validator` (FluentValidation).
-4.  **Expose API**: Create Endpoint in `Controllers`.
-5.  **Map Data**: Update `MappingProfile.cs`.
-
----
-
-## 🐳 Deployment (Docker)
-
-We provide automated scripts to make local deployment on **Docker Desktop** seamless.
-
-### 🔐 Environment Setup
-Copy `.env.example` to `.env` and fill in your credentials:
-```bash
-cp .env.example .env
+```text
+1. Domain     →  Create Entity in Domain/Entities/
+2. Application →  Create Command/Query + Handler in Features/
+3. Validation  →  Add FluentValidation Validator
+4. Controller  →  Create API endpoint in Controllers/
+5. Test        →  Add integration test in BlogApi.Tests/
 ```
 
-Required variables in `.env`:
-```bash
-# Database
-DB_PASSWORD=your_secure_password
+### Outbox Pattern Usage
 
-# JWT
-JWT_SECRET=your_secret_key_at_least_32_chars
-
-# Cloudinary (required for file uploads)
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
-```
-
-These values are automatically injected into the Docker container via `docker-compose.yml`.
-
-### 💨 One-Click Automatic Deployment
-The `deploy-docker.ps1` script handles everything: stopping old containers, building, starting services, and opening the API docs once ready.
-
-```powershell
-# In PowerShell (Project Root)
-.\deploy-docker.ps1
-```
-
-### 🔁 Auto-Sync Developer Mode (Watch)
-Work in real-time. Use **Docker Compose Watch** to automatically rebuild and restart the API whenever you save a code change.
-
-```powershell
-# Start with watch mode
-docker-compose up --watch
-```
-
-### 📦 Manual Build
-```bash
-docker build -t blog-api .
-docker run -p 8080:8080 blog-api
+```csharp
+// In your handler — both operations in the same DB transaction:
+await _postRepository.StageAddAsync(post);
+await _outboxRepository.StageAddAsync(new OutboxMessage
+{
+    Id = Guid.NewGuid(),
+    Type = "Notification",
+    Content = JsonSerializer.Serialize(notification),
+    OccurredOnUtc = DateTime.UtcNow
+});
+await _unitOfWork.SaveChangesAsync(cancellationToken);
+// → Hangfire picks up the outbox message within 1 minute
 ```
 
 ---
 
-## 🧪 Testing Strategy
+## 📄 License
 
-We prioritize **Integration Tests** to ensure system reliability.
-
-- **Framework**: xUnit + WebApplicationFactory.
-- **Database**: SQLite In-Memory (Persistent Mode) — no real database needed.
-- **File Storage**: `FakeFileService` is registered in the test environment, replacing `CloudinaryFileService`. **No Cloudinary API keys are required to run tests.**
-- **Strategy**: Every test spins up a fresh scope but shares the in-memory connection for performance.
-
-```bash
-# Run all tests
-dotnet test
-
-# Run file-specific tests
-dotnet test --filter "FilesControllerTests"
-```
-
-### Test Coverage for File API
-
-| Test | What It Verifies |
-|------|-----------------|
-| `UploadAndDownloadFile_Works` | Upload succeeds and response includes Cloudinary CDN URLs. |
-| `PrivateFile_CannotBeAccessedByOthers` | Private files are blocked for non-owners (403 Forbidden). |
-| `PublicFile_CanBeAccessedByOthers` | Public files are accessible to all authenticated users. |
-| `DeleteFile_Works` | File is removed from cloud storage and metadata cleaned from DB. |
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🤝 Contribution
+<div align="center">
 
-Contributions are welcome! Please follow the **Pull Request** workflow.
-1. Fork repo.
-2. Create branch `feature/your-feature`.
-3. Commit and Push.
-4. Open PR targeting `main`.
+**Built with ❤️ using .NET 9**
 
----
+*Clean Architecture · CQRS · Domain-Driven Design*
 
-**Happy Coding!** 🚀
-
+</div>
+]]>

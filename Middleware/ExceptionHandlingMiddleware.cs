@@ -1,7 +1,7 @@
+using BlogApi.Application.Common.Models;
 using BlogApi.Domain.Exceptions;
 using FluentValidation;
 using System.Text.Json;
-using System.IO;
 
 namespace BlogApi.Middleware;
 
@@ -35,52 +35,63 @@ public class ExceptionHandlingMiddleware
     {
         context.Response.ContentType = "application/json";
         
-        object responseModel;
+        ApiResponse<object> apiResponse;
         int statusCode;
-
+        
         switch (exception)
         {
             case ValidationException validationException:
                 statusCode = StatusCodes.Status400BadRequest;
-                responseModel = new { Errors = validationException.Errors.Select(e => new { e.PropertyName, e.ErrorMessage }) };
+                apiResponse = ApiResponse<object>.FailureResult(
+                    validationException.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}").ToList(),
+                    "Validation failed."
+                );
                 break;
 
             case EntityNotFoundException:
             case KeyNotFoundException:
             case FileNotFoundException:
                 statusCode = StatusCodes.Status404NotFound;
-                responseModel = new { Message = exception.Message };
+                apiResponse = new ApiResponse<object> { Success = false, Message = exception.Message };
                 break;
 
             case UnauthorizedAccessException:
                 statusCode = StatusCodes.Status401Unauthorized;
-                responseModel = new { Message = "Unauthorized" };
+                apiResponse = new ApiResponse<object> { Success = false, Message = "Unauthorized access." };
                 break;
                 
             case AccessDeniedException:
                 statusCode = StatusCodes.Status403Forbidden;
-                responseModel = new { Message = exception.Message };
+                apiResponse = new ApiResponse<object> { Success = false, Message = exception.Message };
                 break;
 
             case DomainException:
             case ArgumentException:
                 statusCode = StatusCodes.Status400BadRequest;
-                responseModel = new { Message = exception.Message };
+                apiResponse = new ApiResponse<object> { Success = false, Message = exception.Message };
                 break;
 
             default:
                 statusCode = StatusCodes.Status500InternalServerError;
-                responseModel = new { Message = "Internal Server Error" };
+                var message = (_env.IsEnvironment("Testing") || _env.IsDevelopment()) 
+                    ? exception.Message 
+                    : "An internal server error occurred.";
                 
-                // Show detailed error in Development or Testing
-                if (_env.IsEnvironment("Testing") || _env.IsDevelopment())
-                {
-                    responseModel = new { Message = exception.Message, StackTrace = exception.StackTrace };
-                }
+                apiResponse = new ApiResponse<object> 
+                { 
+                    Success = false, 
+                    Message = message,
+                    Errors = (_env.IsEnvironment("Testing") || _env.IsDevelopment()) 
+                        ? new List<string> { exception.StackTrace ?? "" } 
+                        : null
+                };
                 break;
         }
 
         context.Response.StatusCode = statusCode;
-        await context.Response.WriteAsync(JsonSerializer.Serialize(responseModel));
+        await context.Response.WriteAsync(JsonSerializer.Serialize(apiResponse, new JsonSerializerOptions 
+        { 
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+        }));
     }
 }

@@ -1,5 +1,6 @@
-﻿using BlogApi.Domain.Entities;
+using BlogApi.Domain.Entities;
 using BlogApi.Application.Common.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using MediatR;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +20,9 @@ public class GetPostCategoryByIdQueryHandler : IRequestHandler<GetPostCategoryBy
 
     public async Task<PostCategoryDto?> Handle(GetPostCategoryByIdQuery request, CancellationToken cancellationToken)
     {
-        var category = await _repository.GetByIdAsync(request.Id);
+        var category = await _repository.GetQueryable()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == request.Id, cancellationToken);
         if (category == null) return null;
 
         return new PostCategoryDto

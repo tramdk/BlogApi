@@ -45,16 +45,44 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
         await _context.SaveChangesAsync();
     }
 
+    /// <inheritdoc/>
+    public virtual async Task StageAddAsync(TEntity entity)
+    {
+        await _dbSet.AddAsync(entity);
+        // No SaveChanges — caller must use IUnitOfWork.SaveChangesAsync()
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task StageAddRangeAsync(IEnumerable<TEntity> entities)
+    {
+        await _dbSet.AddRangeAsync(entities);
+        // No SaveChanges — caller must use IUnitOfWork.SaveChangesAsync()
+    }
+
     public virtual async Task UpdateAsync(TEntity entity)
     {
         _dbSet.Update(entity);
         await _context.SaveChangesAsync();
     }
 
+    /// <inheritdoc/>
+    public virtual void StageUpdate(TEntity entity)
+    {
+        _dbSet.Update(entity);
+        // No SaveChanges — caller must use IUnitOfWork.SaveChangesAsync()
+    }
+
     public virtual async Task DeleteAsync(TEntity entity)
     {
         _dbSet.Remove(entity);
         await _context.SaveChangesAsync();
+    }
+
+    /// <inheritdoc/>
+    public virtual void StageDelete(TEntity entity)
+    {
+        _dbSet.Remove(entity);
+        // No SaveChanges — caller must use IUnitOfWork.SaveChangesAsync()
     }
 
     public IQueryable<TEntity> GetQueryable()

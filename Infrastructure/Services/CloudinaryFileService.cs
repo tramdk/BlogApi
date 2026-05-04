@@ -12,6 +12,8 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Polly;
+using Polly.Registry;
 
 
 namespace BlogApi.Infrastructure.Services;
@@ -22,17 +24,20 @@ public class CloudinaryFileService : IFileService
     private readonly Cloudinary _cloudinary;
     private readonly ICurrentUserService _currentUserService;
     private readonly HttpClient _httpClient;
+    private readonly ResiliencePipeline _resiliencePipeline;
 
     public CloudinaryFileService(
         IGenericRepository<FileMetadata, Guid> repository,
         IOptions<CloudinarySettings> config,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        ResiliencePipelineProvider<string> pipelineProvider)
     {
         _repository = repository;
         _currentUserService = currentUserService;
         var acc = new Account(config.Value.CloudName, config.Value.ApiKey, config.Value.ApiSecret);
         _cloudinary = new Cloudinary(acc);
         _httpClient = new HttpClient();
+        _resiliencePipeline = pipelineProvider.GetPipeline("external-services");
     }
 
     public async Task<FileMetadata> UploadFileAsync(IFormFile file, string? objectId = null, string? objectType = null, bool isPublic = true)
@@ -50,7 +55,9 @@ public class CloudinaryFileService : IFileService
                 Folder = "blog_api",
                 PublicId = $"{Guid.NewGuid()}_{Path.GetFileNameWithoutExtension(file.FileName)}"
             };
-            uploadResult = await _cloudinary.UploadAsync(uploadParams);
+            
+            uploadResult = await _resiliencePipeline.ExecuteAsync(async ct => 
+                await _cloudinary.UploadAsync(uploadParams));
         }
 
         if (uploadResult.Error != null)
@@ -111,7 +118,8 @@ public class CloudinaryFileService : IFileService
         try
         {
             var deletionParams = new DeletionParams(metadata.PublicId ?? metadata.StoredName);
-            await _cloudinary.DestroyAsync(deletionParams);
+            await _resiliencePipeline.ExecuteAsync(async ct => 
+                await _cloudinary.DestroyAsync(deletionParams));
         }
         catch (Exception)
         {
@@ -131,7 +139,8 @@ public class CloudinaryFileService : IFileService
             throw new UnauthorizedAccessException("You are not authorized to access this private file.");
 
         var fileUrl = metadata.Url ?? metadata.FilePath;
-        var bytes = await _httpClient.GetByteArrayAsync(fileUrl);
+        var bytes = await _resiliencePipeline.ExecuteAsync(async ct => 
+            await _httpClient.GetByteArrayAsync(fileUrl));
         
         return (bytes, metadata.ContentType, metadata.FileName);
     }
