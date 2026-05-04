@@ -1,6 +1,6 @@
 using FluentValidation;
 
-namespace BlogApi.Application.Features.Auth.Commands;
+namespace FloraCore.Application.Features.Auth.Commands;
 
 public class LoginCommandValidator : AbstractValidator<LoginCommand>
 {

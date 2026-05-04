@@ -1,6 +1,6 @@
 using System;
 
-namespace BlogApi.Application.Features.ProductCategories.Queries;
+namespace FloraCore.Application.Features.ProductCategories.Queries;
 
 public class ProductCategoryDto
 {

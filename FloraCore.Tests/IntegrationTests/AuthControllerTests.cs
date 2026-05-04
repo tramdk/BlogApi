@@ -1,11 +1,11 @@
 using System.Net;
-using BlogApi.Application.Features.Auth.Commands;
+using FloraCore.Application.Features.Auth.Commands;
 using System.Net.Http.Json;
 using Xunit;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Mvc.Testing;
 
-namespace BlogApi.Tests.IntegrationTests;
+namespace FloraCore.Tests.IntegrationTests;
 
 public class AuthControllerTests : BaseIntegrationTest
 {

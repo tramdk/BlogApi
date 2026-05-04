@@ -1,11 +1,11 @@
-using BlogApi.Application.Features.Chat.Commands.SendMessage;
-using BlogApi.Domain.Entities;
-using BlogApi.Infrastructure.Data;
+using FloraCore.Application.Features.Chat.Commands.SendMessage;
+using FloraCore.Domain.Entities;
+using FloraCore.Infrastructure.Data;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Json;
 using Xunit;
 
-namespace BlogApi.Tests.IntegrationTests;
+namespace FloraCore.Tests.IntegrationTests;
 
 public class ChatControllerTests : BaseIntegrationTest
 {

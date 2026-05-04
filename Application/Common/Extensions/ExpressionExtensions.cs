@@ -1,6 +1,6 @@
 using System.Linq.Expressions;
 
-namespace BlogApi.Application.Common.Extensions;
+namespace FloraCore.Application.Common.Extensions;
 
 /// <summary>
 /// Extension methods for combining Expression predicates

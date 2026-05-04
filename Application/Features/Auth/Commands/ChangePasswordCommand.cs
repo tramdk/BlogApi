@@ -1,6 +1,6 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Services;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Services;
+using FloraCore.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using System;
@@ -8,7 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.Auth.Commands;
+namespace FloraCore.Application.Features.Auth.Commands;
 
 public record ChangePasswordCommand(string OldPassword, string NewPassword) : IRequest<bool>;
 

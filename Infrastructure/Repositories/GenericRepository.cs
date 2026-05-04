@@ -1,10 +1,10 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Models;
-using BlogApi.Infrastructure.Data;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Models;
+using FloraCore.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
-namespace BlogApi.Infrastructure.Repositories;
+namespace FloraCore.Infrastructure.Repositories;
 
 /// <summary>
 /// Generic repository implementation.

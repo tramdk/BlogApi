@@ -1,7 +1,7 @@
 using System.Security.Claims;
-using BlogApi.Domain.Entities;
+using FloraCore.Domain.Entities;
 
-namespace BlogApi.Application.Common.Services;
+namespace FloraCore.Application.Common.Services;
 
 public interface IJwtService
 {

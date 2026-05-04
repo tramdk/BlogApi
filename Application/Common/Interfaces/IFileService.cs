@@ -1,9 +1,9 @@
-using BlogApi.Domain.Entities;
+using FloraCore.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Common.Interfaces;
+namespace FloraCore.Application.Common.Interfaces;
 
 public interface IFileService
 {

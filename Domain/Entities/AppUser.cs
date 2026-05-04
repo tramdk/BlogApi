@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 
-namespace BlogApi.Domain.Entities;
+namespace FloraCore.Domain.Entities;
 
 public class AppUser : IdentityUser<Guid>
 {

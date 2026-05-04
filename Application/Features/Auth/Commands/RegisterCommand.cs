@@ -1,4 +1,4 @@
-using BlogApi.Domain.Entities;
+using FloraCore.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using System;
@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace BlogApi.Application.Features.Auth.Commands;
+namespace FloraCore.Application.Features.Auth.Commands;
 
 public record RegisterCommand(string Email, string Password, string FullName, string Role = "User") : IRequest<bool>;
 

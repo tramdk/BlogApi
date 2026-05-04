@@ -1,7 +1,7 @@
-using BlogApi.Application.Common.Extensions;
-using BlogApi.Infrastructure.Data;
-using BlogApi.Infrastructure;
-using BlogApi.Middleware;
+using FloraCore.Application.Common.Extensions;
+using FloraCore.Infrastructure.Data;
+using FloraCore.Infrastructure;
+using FloraCore.Middleware;
 using Serilog;
 using Hangfire;
 using System.IdentityModel.Tokens.Jwt;
@@ -20,7 +20,7 @@ JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
-    .Enrich.With<BlogApi.Infrastructure.Logging.LogMaskingEnricher>()
+    .Enrich.With<FloraCore.Infrastructure.Logging.LogMaskingEnricher>()
     .CreateLogger();
 builder.Host.UseSerilog();
 
@@ -37,7 +37,7 @@ builder.Services.AddRedisCache(builder.Configuration)
 
 builder.Services.AddControllers(options =>
     {
-        options.Filters.Add<BlogApi.Filters.ApiResponseFilter>();
+        options.Filters.Add<FloraCore.Filters.ApiResponseFilter>();
     })
     .AddJsonOptions(options => 
     {
@@ -112,7 +112,7 @@ app.MapScalarApiReference(options =>
 });
 
 app.UseRouting();
-app.UseCors(BlogApi.Application.Common.Constants.CorsConstants.AllowFrontend);
+app.UseCors(FloraCore.Application.Common.Constants.CorsConstants.AllowFrontend);
 
 if (!app.Environment.IsEnvironment("Testing"))
 {
@@ -128,10 +128,10 @@ app.MapControllers();
 app.MapHangfireDashboard("/hangfire", new DashboardOptions
 {
     // Restrict to authenticated Admin users only
-    Authorization = [new BlogApi.Infrastructure.Security.HangfireDashboardAuthFilter()]
+    Authorization = [new FloraCore.Infrastructure.Security.HangfireDashboardAuthFilter()]
 });
-app.MapHub<BlogApi.Infrastructure.Hubs.ChatHub>("/hubs/chat");
-app.MapHub<BlogApi.Infrastructure.Hubs.NotificationHub>("/hubs/notifications");
+app.MapHub<FloraCore.Infrastructure.Hubs.ChatHub>("/hubs/chat");
+app.MapHub<FloraCore.Infrastructure.Hubs.NotificationHub>("/hubs/notifications");
 
 // ========== Database Seeding ==========
 // ========== Database Initialization & Seeding ==========
@@ -153,7 +153,7 @@ await DatabaseSeederExtensions.SyncTokenBlacklistAsync(app);
 // ========== Hangfire Recurring Jobs ==========
 // NOTE: Hangfire manages its own DI scope per job execution — do NOT capture a scope here.
 var jobManager = app.Services.GetRequiredService<IRecurringJobManager>();
-jobManager.AddOrUpdate<BlogApi.Infrastructure.Services.OutboxProcessor>(
+jobManager.AddOrUpdate<FloraCore.Infrastructure.Services.OutboxProcessor>(
     "outbox-processor",
     processor => processor.ProcessMessagesAsync(),
     Cron.Minutely());

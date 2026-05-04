@@ -1,11 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using BlogApi.Application.Features.Auth.Commands;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Features.Auth.Commands;
+using FloraCore.Domain.Entities;
 using Xunit;
 
-namespace BlogApi.Tests.IntegrationTests;
+namespace FloraCore.Tests.IntegrationTests;
 
 public class FilesControllerTests : BaseIntegrationTest
 {

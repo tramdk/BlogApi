@@ -1,8 +1,8 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Services;
-using BlogApi.Application.Features.Auth.DTOs;
-using BlogApi.Application.Features.Users.Queries;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Services;
+using FloraCore.Application.Features.Auth.DTOs;
+using FloraCore.Application.Features.Users.Queries;
+using FloraCore.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using System;
@@ -11,7 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace BlogApi.Application.Features.Auth.Commands;
+namespace FloraCore.Application.Features.Auth.Commands;
 
 public record LoginCommand(string Email, string Password) : IRequest<AuthResponse>;
 

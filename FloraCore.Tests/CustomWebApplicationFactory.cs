@@ -1,4 +1,4 @@
-using BlogApi.Infrastructure.Data;
+using FloraCore.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -7,10 +7,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using System.Data.Common;
 using System.Collections.Generic;
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Application.Common.Interfaces;
 using System.Linq;
 
-namespace BlogApi.Tests;
+namespace FloraCore.Tests;
 
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
@@ -72,7 +72,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             }
 
             // Override IFileService with FakeFileService
-            services.AddScoped<IFileService, BlogApi.Tests.Mocks.FakeFileService>();
+            services.AddScoped<IFileService, FloraCore.Tests.Mocks.FakeFileService>();
         });
     }
 

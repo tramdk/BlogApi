@@ -1,12 +1,12 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Models;
-using BlogApi.Application.Features.Posts.DTOs;
-using BlogApi.Infrastructure.Data;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Models;
+using FloraCore.Application.Features.Posts.DTOs;
+using FloraCore.Infrastructure.Data;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
 using System.Data;
 
-namespace BlogApi.Infrastructure.Repositories;
+namespace FloraCore.Infrastructure.Repositories;
 
 public class PostQueryService : IPostQueryService
 {

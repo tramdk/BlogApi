@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -6,7 +6,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
 
-namespace BlogApi.Migrations
+namespace FloraCore.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -449,10 +449,10 @@ namespace BlogApi.Migrations
                 columns: new[] { "Id", "CreatedAt", "Name", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { "all", new DateTime(2026, 1, 27, 3, 41, 9, 767, DateTimeKind.Utc).AddTicks(6765), "Tất cả", null },
+                    { "all", new DateTime(2026, 1, 27, 3, 41, 9, 767, DateTimeKind.Utc).AddTicks(6765), "T?t c?", null },
                     { "blog", new DateTime(2026, 1, 27, 3, 41, 9, 767, DateTimeKind.Utc).AddTicks(6768), "Blog", null },
                     { "feedback", new DateTime(2026, 1, 27, 3, 41, 9, 767, DateTimeKind.Utc).AddTicks(6769), "Feedback", null },
-                    { "intro", new DateTime(2026, 1, 27, 3, 41, 9, 767, DateTimeKind.Utc).AddTicks(6769), "Giới thiệu", null }
+                    { "intro", new DateTime(2026, 1, 27, 3, 41, 9, 767, DateTimeKind.Utc).AddTicks(6769), "Gi?i thi?u", null }
                 });
 
             migrationBuilder.CreateIndex(

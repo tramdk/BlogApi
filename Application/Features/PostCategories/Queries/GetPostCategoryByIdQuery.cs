@@ -1,11 +1,11 @@
-using BlogApi.Domain.Entities;
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using MediatR;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.PostCategories.Queries;
+namespace FloraCore.Application.Features.PostCategories.Queries;
 
 public record GetPostCategoryByIdQuery(string Id) : IRequest<PostCategoryDto?>;
 

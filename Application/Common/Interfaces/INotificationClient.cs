@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Common.Interfaces;
+namespace FloraCore.Application.Common.Interfaces;
 
 public interface INotificationClient
 {

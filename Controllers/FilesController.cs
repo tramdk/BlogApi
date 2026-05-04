@@ -1,7 +1,7 @@
 using AutoMapper;
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Models;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Models;
+using FloraCore.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -13,7 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 [Authorize]
 [ApiController]

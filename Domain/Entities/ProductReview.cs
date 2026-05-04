@@ -1,6 +1,6 @@
 using System;
 
-namespace BlogApi.Domain.Entities;
+namespace FloraCore.Domain.Entities;
 
 public class ProductReview
 {

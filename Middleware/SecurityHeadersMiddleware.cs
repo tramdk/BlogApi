@@ -1,4 +1,4 @@
-namespace BlogApi.Middleware;
+namespace FloraCore.Middleware;
 
 public class SecurityHeadersMiddleware
 {

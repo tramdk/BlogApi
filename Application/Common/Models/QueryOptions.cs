@@ -1,6 +1,6 @@
 using System.Linq.Expressions;
 
-namespace BlogApi.Application.Common.Models;
+namespace FloraCore.Application.Common.Models;
 
 /// <summary>
 /// Options for querying entities with filtering, sorting, and pagination.

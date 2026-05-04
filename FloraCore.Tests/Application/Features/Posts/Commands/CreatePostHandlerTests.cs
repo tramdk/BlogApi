@@ -1,11 +1,11 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Features.Posts.Commands;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Features.Posts.Commands;
+using FloraCore.Domain.Entities;
 using FluentAssertions;
 using Moq;
 using Xunit;
 
-namespace BlogApi.Tests.Application.Features.Posts.Commands;
+namespace FloraCore.Tests.Application.Features.Posts.Commands;
 
 public class CreatePostHandlerTests
 {

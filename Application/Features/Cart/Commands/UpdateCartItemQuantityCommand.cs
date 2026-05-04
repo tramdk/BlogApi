@@ -1,23 +1,23 @@
-﻿using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.Cart.Commands;
+namespace FloraCore.Application.Features.Cart.Commands;
 
 public record UpdateCartItemQuantityCommand(Guid ProductId, int Quantity) : IRequest<Unit>;
 
 public class UpdateCartItemQuantityCommandHandler : IRequestHandler<UpdateCartItemQuantityCommand, Unit>
 {
-    private readonly IGenericRepository<BlogApi.Domain.Entities.Cart, Guid> _cartRepository;
+    private readonly IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> _cartRepository;
     private readonly IGenericRepository<CartItem, Guid> _cartItemRepository;
     private readonly ICurrentUserService _currentUserService;
 
     public UpdateCartItemQuantityCommandHandler(
-        IGenericRepository<BlogApi.Domain.Entities.Cart, Guid> cartRepository,
+        IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> cartRepository,
         IGenericRepository<CartItem, Guid> cartItemRepository,
         ICurrentUserService currentUserService)
     {

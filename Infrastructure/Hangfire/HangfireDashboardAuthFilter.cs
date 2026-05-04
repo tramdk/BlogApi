@@ -1,6 +1,6 @@
 using Hangfire.Dashboard;
 
-namespace BlogApi.Infrastructure.Security;
+namespace FloraCore.Infrastructure.Security;
 
 /// <summary>
 /// Authorization filter for the Hangfire Dashboard.

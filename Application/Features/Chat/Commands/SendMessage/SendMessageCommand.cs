@@ -1,9 +1,9 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
 using MediatR;
 
 
-namespace BlogApi.Application.Features.Chat.Commands.SendMessage;
+namespace FloraCore.Application.Features.Chat.Commands.SendMessage;
 
 public record SendMessageCommand(Guid ReceiverId, string Message) : IRequest<Guid>;
 

@@ -6,7 +6,7 @@
 
 [![.NET 9](https://img.shields.io/badge/.NET-9.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![EF Core](https://img.shields.io/badge/EF%20Core-9.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://learn.microsoft.com/en-us/ef/core/)
-[![Tests](https://img.shields.io/badge/tests-36%20passed-2ea44f?style=for-the-badge)](./BlogApi.Tests)
+[![Tests](https://img.shields.io/badge/tests-36%20passed-2ea44f?style=for-the-badge)](./FloraCore.Tests)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](./Dockerfile)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](./LICENSE)
 
@@ -62,7 +62,7 @@ The project enforces a **strict dependency rule** — dependencies only flow inw
 ### 📁 Project Structure
 
 ```text
-BlogApi/
+FloraCore/
 ├── Application/                     # Use Cases Layer
 │   ├── Common/
 │   │   ├── Attributes/              # [Cacheable], [Authorize] custom attributes
@@ -91,7 +91,7 @@ BlogApi/
 ├── Controllers/                     # 12 API Controllers (versioned: /api/v1/...)
 ├── Middleware/                      # Exception Handling, Security Headers, Token Blacklist
 ├── Filters/                         # ApiResponseFilter (auto-wrap responses)
-└── BlogApi.Tests/                   # Test Suite
+└── FloraCore.Tests/                   # Test Suite
     ├── IntegrationTests/            # 7 test classes, 36 tests
     ├── ArchitectureTests/           # Clean Architecture enforcement
     └── Mocks/                       # FakeFileService
@@ -451,7 +451,7 @@ Response
 2. Application →  Create Command/Query + Handler in Features/
 3. Validation  →  Add FluentValidation Validator
 4. Controller  →  Create API endpoint in Controllers/
-5. Test        →  Add integration test in BlogApi.Tests/
+5. Test        →  Add integration test in FloraCore.Tests/
 ```
 
 ### Outbox Pattern Usage

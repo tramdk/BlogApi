@@ -1,5 +1,5 @@
-﻿using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -7,16 +7,16 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.Cart.Queries;
+namespace FloraCore.Application.Features.Cart.Queries;
 
 public record GetCartQuery : IRequest<CartDto>;
 
 public class GetCartQueryHandler : IRequestHandler<GetCartQuery, CartDto>
 {
-    private readonly IGenericRepository<BlogApi.Domain.Entities.Cart, Guid> _cartRepository;
+    private readonly IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> _cartRepository;
     private readonly ICurrentUserService _currentUserService;
 
-    public GetCartQueryHandler(IGenericRepository<BlogApi.Domain.Entities.Cart, Guid> cartRepository, ICurrentUserService currentUserService)
+    public GetCartQueryHandler(IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> cartRepository, ICurrentUserService currentUserService)
     {
         _cartRepository = cartRepository;
         _currentUserService = currentUserService;

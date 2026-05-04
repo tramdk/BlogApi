@@ -1,9 +1,9 @@
-using BlogApi.Application.Features.Posts.Commands;
+using FloraCore.Application.Features.Posts.Commands;
 using FluentValidation.TestHelper;
 using System;
 using Xunit;
 
-namespace BlogApi.Tests.UnitTests.Validators;
+namespace FloraCore.Tests.UnitTests.Validators;
 
 public class PostValidatorsTests
 {

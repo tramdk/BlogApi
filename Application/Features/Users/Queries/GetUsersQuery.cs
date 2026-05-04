@@ -1,11 +1,11 @@
-using BlogApi.Application.Common.Attributes;
-using BlogApi.Application.Common.Models;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Attributes;
+using FloraCore.Application.Common.Models;
+using FloraCore.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
-namespace BlogApi.Application.Features.Users.Queries;
+namespace FloraCore.Application.Features.Users.Queries;
 
 [Cacheable(ExpirationMinutes = 2)]
 public record GetUsersQuery(int PageNumber = 1, int PageSize = 10) : IRequest<PagedResult<UserDto>>;

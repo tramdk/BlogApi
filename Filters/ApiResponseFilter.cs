@@ -1,8 +1,8 @@
-using BlogApi.Application.Common.Models;
+using FloraCore.Application.Common.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
-namespace BlogApi.Filters;
+namespace FloraCore.Filters;
 
 public class ApiResponseFilter : IAsyncResultFilter
 {

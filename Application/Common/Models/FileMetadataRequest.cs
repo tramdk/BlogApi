@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace BlogApi.Application.Common.Models;
+namespace FloraCore.Application.Common.Models;
 
 public class FileMetadataRequest
 {

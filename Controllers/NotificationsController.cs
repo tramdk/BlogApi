@@ -1,5 +1,5 @@
-using BlogApi.Application.Features.Notifications.Commands.MarkAsRead;
-using BlogApi.Application.Features.Notifications.Queries.GetNotifications;
+using FloraCore.Application.Features.Notifications.Commands.MarkAsRead;
+using FloraCore.Application.Features.Notifications.Queries.GetNotifications;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 using Asp.Versioning;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 [Authorize]
 [ApiController]

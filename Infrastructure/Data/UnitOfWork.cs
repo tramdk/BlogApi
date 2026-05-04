@@ -1,8 +1,8 @@
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace BlogApi.Infrastructure.Data;
+namespace FloraCore.Infrastructure.Data;
 
 /// <summary>
 /// Unit of Work implementation using Entity Framework Core.

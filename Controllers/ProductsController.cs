@@ -1,6 +1,6 @@
-using BlogApi.Application.Common.Models;
-using BlogApi.Application.Features.Products.Commands;
-using BlogApi.Application.Features.Products.Queries;
+using FloraCore.Application.Common.Models;
+using FloraCore.Application.Features.Products.Commands;
+using FloraCore.Application.Features.Products.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 using Asp.Versioning;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 /// <summary>
 /// Controller for managing products.

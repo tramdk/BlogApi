@@ -1,4 +1,4 @@
-namespace BlogApi.Domain.Exceptions;
+namespace FloraCore.Domain.Exceptions;
 
 /// <summary>
 /// Base exception for all domain-specific exceptions.

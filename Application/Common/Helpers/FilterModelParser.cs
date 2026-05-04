@@ -1,9 +1,9 @@
-using BlogApi.Application.Common.Extensions;
-using BlogApi.Application.Common.Models;
+using FloraCore.Application.Common.Extensions;
+using FloraCore.Application.Common.Models;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace BlogApi.Application.Common.Helpers;
+namespace FloraCore.Application.Common.Helpers;
 
 /// <summary>
 /// Parser to convert FilterModel to LINQ Expression predicates

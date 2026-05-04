@@ -2,12 +2,12 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using BlogApi.Application.Common.Services;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Services;
+using FloraCore.Domain.Entities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
-namespace BlogApi.Infrastructure.Services;
+namespace FloraCore.Infrastructure.Services;
 
 public class JwtService : IJwtService
 {

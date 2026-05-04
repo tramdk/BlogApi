@@ -1,13 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
-using BlogApi.Application.Features.Users.Commands;
-using BlogApi.Application.Features.Users.Queries;
+using FloraCore.Application.Features.Users.Commands;
+using FloraCore.Application.Features.Users.Queries;
 using Xunit;
-using BlogApi.Application.Features.Auth.Commands;
-using BlogApi.Application.Common.Models;
+using FloraCore.Application.Features.Auth.Commands;
+using FloraCore.Application.Common.Models;
 using System.Net.Http.Headers;
 
-namespace BlogApi.Tests.IntegrationTests;
+namespace FloraCore.Tests.IntegrationTests;
 
 public class UsersControllerTests : BaseIntegrationTest
 {

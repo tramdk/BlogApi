@@ -3,8 +3,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>BlogApi</RootNamespace>
-    <DefaultItemExcludes>$(DefaultItemExcludes);BlogApi.Tests\**</DefaultItemExcludes>
+    <RootNamespace>FloraCore</RootNamespace>
+    <DefaultItemExcludes>$(DefaultItemExcludes);FloraCore.Tests\**</DefaultItemExcludes>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>

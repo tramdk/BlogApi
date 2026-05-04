@@ -1,5 +1,5 @@
-using BlogApi.Application.Features.Cart.Commands;
-using BlogApi.Application.Features.Cart.Queries;
+using FloraCore.Application.Features.Cart.Commands;
+using FloraCore.Application.Features.Cart.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 using Asp.Versioning;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]

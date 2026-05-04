@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MediatR;
 
-namespace BlogApi.Application.Common.Behaviors;
+namespace FloraCore.Application.Common.Behaviors;
 
 public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>

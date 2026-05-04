@@ -16,7 +16,7 @@ if (-not (Test-Path $hooksDir)) {
 $preCommitContent = @"
 #!/bin/sh
 echo "🔍 Running pre-commit tests (10s)..."
-powershell.exe -ExecutionPolicy Bypass -Command "dotnet test BlogApi.Tests/BlogApi.Tests.csproj"
+powershell.exe -ExecutionPolicy Bypass -Command "dotnet test FloraCore.Tests/FloraCore.Tests.csproj"
 if [ `$? -ne 0 ]; then
     echo "❌ Tests failed! Commit aborted. Please fix the tests before committing."
     exit 1

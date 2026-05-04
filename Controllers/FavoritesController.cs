@@ -1,4 +1,4 @@
-using BlogApi.Application.Features.Favorites.Commands;
+using FloraCore.Application.Features.Favorites.Commands;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 using Asp.Versioning;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]

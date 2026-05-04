@@ -1,4 +1,4 @@
-namespace BlogApi.Application.Common.Models;
+namespace FloraCore.Application.Common.Models;
 
 /// <summary>
 /// Paged result with metadata

@@ -1,4 +1,4 @@
-namespace BlogApi.Application.Common.Interfaces;
+namespace FloraCore.Application.Common.Interfaces;
 
 /// <summary>
 /// Marks a request as requiring ownership verification for a resource.

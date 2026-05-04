@@ -1,13 +1,13 @@
 using System;
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
-using BlogApi.Infrastructure.Hubs;
-using BlogApi.Infrastructure.Repositories;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
+using FloraCore.Infrastructure.Hubs;
+using FloraCore.Infrastructure.Repositories;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.Tasks;
 
 
-namespace BlogApi.Infrastructure.Services;
+namespace FloraCore.Infrastructure.Services;
 
 public class NotificationService : INotificationService
 {

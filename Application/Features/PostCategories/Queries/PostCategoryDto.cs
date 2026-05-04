@@ -1,6 +1,6 @@
 using System;
 
-namespace BlogApi.Application.Features.PostCategories.Queries;
+namespace FloraCore.Application.Features.PostCategories.Queries;
 
 public class PostCategoryDto
 {

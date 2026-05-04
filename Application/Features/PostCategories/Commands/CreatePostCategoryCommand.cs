@@ -1,10 +1,10 @@
-﻿using BlogApi.Domain.Entities;
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
 using MediatR;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.PostCategories.Commands;
+namespace FloraCore.Application.Features.PostCategories.Commands;
 
 public record CreatePostCategoryCommand(string Id, string Name) : IRequest<string>;
 

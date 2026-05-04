@@ -1,4 +1,4 @@
-namespace BlogApi.Application.Common.Interfaces;
+namespace FloraCore.Application.Common.Interfaces;
 
 /// <summary>
 /// Service interface for getting current date/time.

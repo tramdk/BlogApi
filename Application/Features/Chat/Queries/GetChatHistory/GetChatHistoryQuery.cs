@@ -1,5 +1,5 @@
-﻿using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
 using MediatR;
 using System;
 using System.Collections.Generic;
@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.Chat.Queries.GetChatHistory;
+namespace FloraCore.Application.Features.Chat.Queries.GetChatHistory;
 
 public record GetChatHistoryQuery(Guid OtherUserId) : IRequest<List<ChatMessageDto>>;
 

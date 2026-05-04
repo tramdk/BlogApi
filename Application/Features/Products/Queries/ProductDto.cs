@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace BlogApi.Application.Features.Products.Queries;
+namespace FloraCore.Application.Features.Products.Queries;
 
 public record ProductDto
 {

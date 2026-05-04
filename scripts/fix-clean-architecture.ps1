@@ -32,7 +32,7 @@ $files = @(
     "Application\Common\Behaviors\AuthorizationBehavior.cs"
 )
 
-$baseDir = "c:\Users\T\.gemini\antigravity\scratch\BlogApi"
+$baseDir = "c:\Users\T\.gemini\antigravity\scratch\FloraCore"
 $count = 0
 $errors = @()
 
@@ -44,7 +44,7 @@ foreach ($file in $files) {
             $content = Get-Content $fullPath -Raw -Encoding UTF8
             
             # Replace the import
-            $newContent = $content -replace 'using BlogApi\.Infrastructure\.Repositories;', 'using BlogApi.Application.Common.Interfaces;'
+            $newContent = $content -replace 'using FloraCore\.Infrastructure\.Repositories;', 'using FloraCore.Application.Common.Interfaces;'
             
             # Only write if changed
             if ($content -ne $newContent) {

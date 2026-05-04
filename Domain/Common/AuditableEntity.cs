@@ -1,4 +1,4 @@
-namespace BlogApi.Domain.Common;
+namespace FloraCore.Domain.Common;
 
 /// <summary>
 /// Entity with auditing fields (CreatedAt, UpdatedAt).

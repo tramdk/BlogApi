@@ -1,6 +1,6 @@
 using FluentValidation;
 
-namespace BlogApi.Application.Features.Products.Commands;
+namespace FloraCore.Application.Features.Products.Commands;
 
 public class CreateProductCommandValidator : AbstractValidator<CreateProductCommand>
 {

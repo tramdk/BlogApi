@@ -1,21 +1,21 @@
 using System.Text;
 using AspNetCoreRateLimit;
 using AspNetCoreRateLimit.Redis;
-using BlogApi.Application.Common.Behaviors;
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Services;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Behaviors;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Services;
+using FloraCore.Domain.Entities;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using BlogApi.Application.Common.Constants;
+using FloraCore.Application.Common.Constants;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
 
-namespace BlogApi.Application.Common.Extensions;
+namespace FloraCore.Application.Common.Extensions;
 
 /// <summary>
 /// Extension methods for IServiceCollection to organize DI registration.
@@ -80,7 +80,7 @@ public static class ServiceCollectionExtensions
             services.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnectionString;
-                options.InstanceName = "BlogApi_";
+                options.InstanceName = "FloraCore_";
             });
         }
         return services;

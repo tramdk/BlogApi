@@ -1,5 +1,5 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 
-namespace BlogApi.Application.Features.Reviews.Commands;
+namespace FloraCore.Application.Features.Reviews.Commands;
 
 public record AddProductReviewCommand(Guid ProductId, int Rating, string Comment) : IRequest<Unit>;
 

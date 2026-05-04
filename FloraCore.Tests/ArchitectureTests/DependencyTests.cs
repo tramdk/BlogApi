@@ -1,14 +1,14 @@
 using NetArchTest.Rules;
 using Xunit;
 
-namespace BlogApi.Tests.ArchitectureTests;
+namespace FloraCore.Tests.ArchitectureTests;
 
 public class DependencyTests
 {
-    private const string DomainNamespace = "BlogApi.Domain";
-    private const string ApplicationNamespace = "BlogApi.Application";
-    private const string InfrastructureNamespace = "BlogApi.Infrastructure";
-    private const string PresentationNamespace = "BlogApi.Controllers"; // Specific to Controllers
+    private const string DomainNamespace = "FloraCore.Domain";
+    private const string ApplicationNamespace = "FloraCore.Application";
+    private const string InfrastructureNamespace = "FloraCore.Infrastructure";
+    private const string PresentationNamespace = "FloraCore.Controllers"; // Specific to Controllers
 
     [Fact]
     public void Domain_Should_Not_Have_Dependency_On_Other_Namespaces()

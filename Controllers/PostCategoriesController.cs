@@ -1,5 +1,5 @@
-using BlogApi.Application.Features.PostCategories.Commands;
-using BlogApi.Application.Features.PostCategories.Queries;
+using FloraCore.Application.Features.PostCategories.Commands;
+using FloraCore.Application.Features.PostCategories.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +7,7 @@ using Asp.Versioning;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]

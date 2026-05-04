@@ -9,7 +9,7 @@
 **/TestResults
 **/test_uploads
 **/uploads
-BlogApi.Tests/
+FloraCore.Tests/
 README.md
 docs/
 **/logs

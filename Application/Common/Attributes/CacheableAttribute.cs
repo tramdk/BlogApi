@@ -1,4 +1,4 @@
-namespace BlogApi.Application.Common.Attributes;
+namespace FloraCore.Application.Common.Attributes;
 
 [AttributeUsage(AttributeTargets.Class)]
 public class CacheableAttribute : Attribute

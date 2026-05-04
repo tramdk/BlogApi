@@ -1,4 +1,4 @@
-namespace BlogApi.Application.Common.Interfaces;
+namespace FloraCore.Application.Common.Interfaces;
 
 /// <summary>
 /// Unit of Work pattern interface for managing database transactions.

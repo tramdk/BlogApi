@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace BlogApi.Application.Features.Cart.Queries;
+namespace FloraCore.Application.Features.Cart.Queries;
 
 public record CartDto
 {

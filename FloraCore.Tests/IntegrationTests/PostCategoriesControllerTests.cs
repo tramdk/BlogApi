@@ -1,12 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
-using BlogApi.Application.Features.PostCategories.Queries;
-using BlogApi.Application.Features.Auth.Commands;
+using FloraCore.Application.Features.PostCategories.Queries;
+using FloraCore.Application.Features.Auth.Commands;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
-namespace BlogApi.Tests.IntegrationTests;
+namespace FloraCore.Tests.IntegrationTests;
 
 public class PostCategoriesControllerTests : BaseIntegrationTest
 {

@@ -1,6 +1,6 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Models;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Models;
+using FloraCore.Domain.Entities;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.AspNetCore.Http;
@@ -16,7 +16,7 @@ using Polly;
 using Polly.Registry;
 
 
-namespace BlogApi.Infrastructure.Services;
+namespace FloraCore.Infrastructure.Services;
 
 public class CloudinaryFileService : IFileService
 {

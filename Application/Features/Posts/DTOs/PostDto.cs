@@ -1,4 +1,4 @@
-namespace BlogApi.Application.Features.Posts.DTOs;
+namespace FloraCore.Application.Features.Posts.DTOs;
 
 public record PostDto
 {

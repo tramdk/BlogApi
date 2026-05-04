@@ -1,11 +1,11 @@
 using System.Text.Json;
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
-using BlogApi.Infrastructure.Data;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
+using FloraCore.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace BlogApi.Infrastructure.Services;
+namespace FloraCore.Infrastructure.Services;
 
 /// <summary>
 /// Service to process messages in the Outbox table.

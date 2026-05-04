@@ -1,5 +1,5 @@
-﻿using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -7,18 +7,18 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.Cart.Commands;
+namespace FloraCore.Application.Features.Cart.Commands;
 
 public record RemoveFromCartCommand(Guid ProductId) : IRequest<Unit>;
 
 public class RemoveFromCartCommandHandler : IRequestHandler<RemoveFromCartCommand, Unit>
 {
-    private readonly IGenericRepository<BlogApi.Domain.Entities.Cart, Guid> _cartRepository;
+    private readonly IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> _cartRepository;
     private readonly IGenericRepository<CartItem, Guid> _cartItemRepository;
     private readonly ICurrentUserService _currentUserService;
 
     public RemoveFromCartCommandHandler(
-        IGenericRepository<BlogApi.Domain.Entities.Cart, Guid> cartRepository, 
+        IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> cartRepository, 
         IGenericRepository<CartItem, Guid> cartItemRepository,
         ICurrentUserService currentUserService)
     {

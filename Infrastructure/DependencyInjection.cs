@@ -1,10 +1,10 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Services;
-using BlogApi.Application.Common.Models;
-using BlogApi.Domain.Entities;
-using BlogApi.Infrastructure.Data;
-using BlogApi.Infrastructure.Repositories;
-using BlogApi.Infrastructure.Services;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Services;
+using FloraCore.Application.Common.Models;
+using FloraCore.Domain.Entities;
+using FloraCore.Infrastructure.Data;
+using FloraCore.Infrastructure.Repositories;
+using FloraCore.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,7 +15,7 @@ using Hangfire.PostgreSql;
 using OpenTelemetry.Resources;
 using Microsoft.Extensions.Caching.Hybrid;
 
-namespace BlogApi.Infrastructure;
+namespace FloraCore.Infrastructure;
 
 public static class DependencyInjection
 {
@@ -72,7 +72,7 @@ public static class DependencyInjection
     public static IServiceCollection AddSignalRServices(this IServiceCollection services)
     {
         services.AddSignalR();
-        services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, BlogApi.Infrastructure.Hubs.UserIdProvider>();
+        services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, FloraCore.Infrastructure.Hubs.UserIdProvider>();
         return services;
     }
 

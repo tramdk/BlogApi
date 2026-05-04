@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace BlogApi.Domain.Entities;
+namespace FloraCore.Domain.Entities;
 
 public class Product
 {

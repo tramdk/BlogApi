@@ -5,7 +5,7 @@ Write-Host "  Replacing IPostRepository" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-$baseDir = "c:\Users\T\.gemini\antigravity\scratch\BlogApi"
+$baseDir = "c:\Users\T\.gemini\antigravity\scratch\FloraCore"
 $files = @(
     "Application\Features\Posts\Commands\CreatePostCommand.cs",
     "Application\Features\Posts\Commands\UpdatePostCommand.cs",

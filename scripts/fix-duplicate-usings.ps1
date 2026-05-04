@@ -14,7 +14,7 @@ $files = @(
     "Application\Features\Reviews\Commands\AddProductReviewCommand.cs"
 )
 
-$baseDir = "c:\Users\T\.gemini\antigravity\scratch\BlogApi"
+$baseDir = "c:\Users\T\.gemini\antigravity\scratch\FloraCore"
 $count = 0
 
 foreach ($file in $files) {

@@ -1,4 +1,4 @@
-namespace BlogApi.Application.Common.Constants;
+namespace FloraCore.Application.Common.Constants;
 
 public static class RoleConstants
 {

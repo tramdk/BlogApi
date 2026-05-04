@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 
-namespace BlogApi.Infrastructure.Hubs;
+namespace FloraCore.Infrastructure.Hubs;
 
 public class UserIdProvider : IUserIdProvider
 {

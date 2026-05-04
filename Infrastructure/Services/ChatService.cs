@@ -1,8 +1,8 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Infrastructure.Hubs;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Infrastructure.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
-namespace BlogApi.Infrastructure.Services;
+namespace FloraCore.Infrastructure.Services;
 
 /// <summary>
 /// Implementation of IChatService using SignalR.

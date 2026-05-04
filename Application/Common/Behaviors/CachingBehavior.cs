@@ -1,12 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using BlogApi.Application.Common.Attributes;
+using FloraCore.Application.Common.Attributes;
 using Microsoft.Extensions.Caching.Hybrid;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace BlogApi.Application.Common.Behaviors;
+namespace FloraCore.Application.Common.Behaviors;
 
 public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse> 
     where TRequest : IRequest<TResponse>

@@ -1,9 +1,9 @@
-using BlogApi.Domain.Entities;
+using FloraCore.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace BlogApi.Infrastructure.Data;
+namespace FloraCore.Infrastructure.Data;
 
 public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
 {

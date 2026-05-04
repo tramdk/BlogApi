@@ -1,8 +1,8 @@
 using System.Security.Claims;
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Http;
 
-namespace BlogApi.Application.Common.Services;
+namespace FloraCore.Application.Common.Services;
 
 /// <summary>
 /// Retrieves the current authenticated user's ID from the HTTP context claims.

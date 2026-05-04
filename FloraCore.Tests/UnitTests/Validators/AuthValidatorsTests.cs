@@ -1,8 +1,8 @@
-using BlogApi.Application.Features.Auth.Commands;
+using FloraCore.Application.Features.Auth.Commands;
 using FluentValidation.TestHelper;
 using Xunit;
 
-namespace BlogApi.Tests.UnitTests.Validators;
+namespace FloraCore.Tests.UnitTests.Validators;
 
 public class AuthValidatorsTests
 {

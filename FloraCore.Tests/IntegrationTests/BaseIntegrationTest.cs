@@ -1,12 +1,12 @@
-using BlogApi.Application.Common.Models;
-using BlogApi.Infrastructure.Data;
+using FloraCore.Application.Common.Models;
+using FloraCore.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Json;
 using Xunit;
 
-namespace BlogApi.Tests.IntegrationTests;
+namespace FloraCore.Tests.IntegrationTests;
 
 public class BaseIntegrationTest : IClassFixture<CustomWebApplicationFactory>
 {

@@ -1,9 +1,9 @@
-using BlogApi.Application.Common.Models;
-using BlogApi.Domain.Exceptions;
+using FloraCore.Application.Common.Models;
+using FloraCore.Domain.Exceptions;
 using FluentValidation;
 using System.Text.Json;
 
-namespace BlogApi.Middleware;
+namespace FloraCore.Middleware;
 
 public class ExceptionHandlingMiddleware
 {

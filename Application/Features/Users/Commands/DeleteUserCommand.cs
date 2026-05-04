@@ -1,11 +1,11 @@
-using BlogApi.Domain.Entities;
+using FloraCore.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.Users.Commands;
+namespace FloraCore.Application.Features.Users.Commands;
 
 public record DeleteUserCommand(Guid Id) : IRequest<bool>;
 

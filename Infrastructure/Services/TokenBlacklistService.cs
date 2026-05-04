@@ -1,7 +1,7 @@
-using BlogApi.Application.Common.Services;
+using FloraCore.Application.Common.Services;
 using Microsoft.Extensions.Caching.Distributed;
 
-namespace BlogApi.Infrastructure.Services;
+namespace FloraCore.Infrastructure.Services;
 
 public class TokenBlacklistService : ITokenBlacklistService
 {

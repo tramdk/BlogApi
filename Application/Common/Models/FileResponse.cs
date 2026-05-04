@@ -1,6 +1,6 @@
 using System;
 
-namespace BlogApi.Application.Common.Models;
+namespace FloraCore.Application.Common.Models;
 
 public class FileResponse
 {

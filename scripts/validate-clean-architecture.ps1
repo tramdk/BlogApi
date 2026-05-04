@@ -7,14 +7,14 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 $violations = @()
-$baseDir = "c:\Users\T\.gemini\antigravity\scratch\BlogApi"
+$baseDir = "c:\Users\T\.gemini\antigravity\scratch\FloraCore"
 
 # Check 1: Application layer should NOT import from Infrastructure
 Write-Host "[1/4] Checking Application layer dependencies..." -ForegroundColor Yellow
 $appFiles = Get-ChildItem -Path (Join-Path $baseDir "Application") -Recurse -Filter "*.cs"
 foreach ($file in $appFiles) {
     $content = Get-Content $file.FullName -Raw
-    if ($content -match "using BlogApi\.Infrastructure") {
+    if ($content -match "using FloraCore\.Infrastructure") {
         $violations += "❌ $($file.FullName.Replace($baseDir, '')) imports Infrastructure"
     }
 }
@@ -52,7 +52,7 @@ $domainFiles = Get-ChildItem -Path (Join-Path $baseDir "Domain") -Recurse -Filte
 $domainViolations = 0
 foreach ($file in $domainFiles) {
     $content = Get-Content $file.FullName -Raw
-    if ($content -match "using BlogApi\.(Application|Infrastructure)") {
+    if ($content -match "using FloraCore\.(Application|Infrastructure)") {
         $violations += "❌ $($file.FullName.Replace($baseDir, '')) has dependencies on other layers"
         $domainViolations++
     }

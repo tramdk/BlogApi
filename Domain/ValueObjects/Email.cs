@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace BlogApi.Domain.ValueObjects;
+namespace FloraCore.Domain.ValueObjects;
 
 /// <summary>
 /// Value object representing an email address.

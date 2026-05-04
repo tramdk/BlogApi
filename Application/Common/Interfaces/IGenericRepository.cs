@@ -1,7 +1,7 @@
-using BlogApi.Application.Common.Models;
+using FloraCore.Application.Common.Models;
 using System.Linq.Expressions;
 
-namespace BlogApi.Application.Common.Interfaces;
+namespace FloraCore.Application.Common.Interfaces;
 
 /// <summary>
 /// Generic repository interface for common CRUD operations.

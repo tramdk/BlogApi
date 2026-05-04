@@ -1,11 +1,11 @@
-using BlogApi.Domain.Entities;
+using FloraCore.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using UUIDNext;
-using BlogApi.Application.Common.Constants;
+using FloraCore.Application.Common.Constants;
 
-namespace BlogApi.Infrastructure.Data;
+namespace FloraCore.Infrastructure.Data;
 
 /// <summary>
 /// Database seeding service to initialize default data.
@@ -322,7 +322,7 @@ public static class DatabaseSeederExtensions
         {
             using var scope = app.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var blacklistService = scope.ServiceProvider.GetRequiredService<BlogApi.Application.Common.Services.ITokenBlacklistService>();
+            var blacklistService = scope.ServiceProvider.GetRequiredService<FloraCore.Application.Common.Services.ITokenBlacklistService>();
 
             // Only fetch revoked tokens that haven't expired yet
             var activeRevokedTokens = await context.RefreshTokens

@@ -26,6 +26,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\BlogApi.csproj" />
+    <ProjectReference Include="..\FloraCore.csproj" />
   </ItemGroup>
 </Project>

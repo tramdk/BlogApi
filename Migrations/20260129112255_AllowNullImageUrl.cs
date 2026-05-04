@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace BlogApi.Migrations
+namespace FloraCore.Migrations
 {
     /// <inheritdoc />
     public partial class AllowNullImageUrl : Migration

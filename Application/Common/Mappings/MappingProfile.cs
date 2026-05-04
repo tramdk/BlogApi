@@ -1,12 +1,12 @@
 using AutoMapper;
-using BlogApi.Application.Common.Models;
-using BlogApi.Application.Features.Posts.DTOs;
-using BlogApi.Application.Features.Products.Queries;
-using BlogApi.Application.Features.Users.Queries;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Models;
+using FloraCore.Application.Features.Posts.DTOs;
+using FloraCore.Application.Features.Products.Queries;
+using FloraCore.Application.Features.Users.Queries;
+using FloraCore.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 
-namespace BlogApi.Application.Common.Mappings;
+namespace FloraCore.Application.Common.Mappings;
 
 public class MappingProfile : Profile
 {

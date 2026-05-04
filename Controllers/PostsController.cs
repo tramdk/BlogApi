@@ -1,12 +1,12 @@
-using BlogApi.Application.Features.Posts.Queries;
-using BlogApi.Application.Features.Posts.Commands;
-using BlogApi.Application.Features.Posts.DTOs;
+using FloraCore.Application.Features.Posts.Queries;
+using FloraCore.Application.Features.Posts.Commands;
+using FloraCore.Application.Features.Posts.DTOs;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 /// <summary>
 /// Controller for managing blog posts.

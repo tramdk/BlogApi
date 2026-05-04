@@ -1,6 +1,6 @@
-using BlogApi.Application.Common.Models;
+using FloraCore.Application.Common.Models;
 
-namespace BlogApi.Application.Features.Posts.DTOs;
+namespace FloraCore.Application.Features.Posts.DTOs;
 
 /// <summary>
 /// Unified search request that supports multiple approaches:

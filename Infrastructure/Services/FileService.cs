@@ -1,6 +1,6 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
-using BlogApi.Infrastructure.Data;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
+using FloraCore.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -10,11 +10,11 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
-using BlogApi.Infrastructure.Repositories;
+using FloraCore.Infrastructure.Repositories;
 
-using BlogApi.Domain.Exceptions;
+using FloraCore.Domain.Exceptions;
 
-namespace BlogApi.Infrastructure.Services;
+namespace FloraCore.Infrastructure.Services;
 
 public class FileService : IFileService
 {

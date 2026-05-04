@@ -1,11 +1,11 @@
-using BlogApi.Application.Common.Attributes;
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
-using BlogApi.Application.Features.Posts.DTOs;
-using BlogApi.Application.Common.Models;
+using FloraCore.Application.Common.Attributes;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
+using FloraCore.Application.Features.Posts.DTOs;
+using FloraCore.Application.Common.Models;
 using MediatR;
 
-namespace BlogApi.Application.Features.Posts.Queries;
+namespace FloraCore.Application.Features.Posts.Queries;
 
 [Cacheable(ExpirationMinutes = 5)]
 public record GetPostDetailQuery(Guid Id) : IRequest<PostDetailDto>;

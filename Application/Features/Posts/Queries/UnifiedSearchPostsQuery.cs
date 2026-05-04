@@ -1,17 +1,17 @@
-using BlogApi.Application.Common.Extensions;
-using BlogApi.Application.Common.Helpers;
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Models;
-using BlogApi.Application.Features.Posts.DTOs;
-using BlogApi.Application.Features.Posts.Extensions;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Extensions;
+using FloraCore.Application.Common.Helpers;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Models;
+using FloraCore.Application.Features.Posts.DTOs;
+using FloraCore.Application.Features.Posts.Extensions;
+using FloraCore.Domain.Entities;
 using MediatR;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
-namespace BlogApi.Application.Features.Posts.Queries;
+namespace FloraCore.Application.Features.Posts.Queries;
 
 /// <summary>
 /// Unified search query that supports multiple approaches:

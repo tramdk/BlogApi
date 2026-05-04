@@ -8,7 +8,7 @@ $files = @(
     "Application\Common\Behaviors\AuthorizationBehavior.cs"
 )
 
-$baseDir = "c:\Users\T\.gemini\antigravity\scratch\BlogApi"
+$baseDir = "c:\Users\T\.gemini\antigravity\scratch\FloraCore"
 
 foreach ($file in $files) {
     $fullPath = Join-Path $baseDir $file
@@ -17,9 +17,9 @@ foreach ($file in $files) {
         $content = Get-Content $fullPath -Raw -Encoding UTF8
         
         # Check if already has the using
-        if ($content -notmatch 'using BlogApi\.Domain\.Entities;') {
+        if ($content -notmatch 'using FloraCore\.Domain\.Entities;') {
             # Add after the first using statement
-            $content = $content -replace '(using BlogApi\.Application\.Common\.Interfaces;)', "`$1`r`nusing BlogApi.Domain.Entities;"
+            $content = $content -replace '(using FloraCore\.Application\.Common\.Interfaces;)', "`$1`r`nusing FloraCore.Domain.Entities;"
             
             Set-Content -Path $fullPath -Value $content -NoNewline -Encoding UTF8
             Write-Host "✅ Fixed: $file" -ForegroundColor Green

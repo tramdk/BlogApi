@@ -1,6 +1,6 @@
-﻿using BlogApi.Application.Features.Products.Queries;
-using BlogApi.Domain.Entities;
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Application.Features.Products.Queries;
+using FloraCore.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -8,7 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.Products.Queries;
+namespace FloraCore.Application.Features.Products.Queries;
 
 public record GetProductByIdQuery(Guid Id) : IRequest<ProductDto?>;
 

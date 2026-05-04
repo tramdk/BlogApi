@@ -1,4 +1,4 @@
-namespace BlogApi.Domain.Common;
+namespace FloraCore.Domain.Common;
 
 /// <summary>
 /// Base entity with common properties for all entities.

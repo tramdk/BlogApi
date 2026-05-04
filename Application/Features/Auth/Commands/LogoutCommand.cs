@@ -1,10 +1,10 @@
-﻿using BlogApi.Application.Common.Services;
-using BlogApi.Domain.Entities;
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Application.Common.Services;
+using FloraCore.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
 using MediatR;
 using System.IdentityModel.Tokens.Jwt;
 
-namespace BlogApi.Application.Features.Auth.Commands;
+namespace FloraCore.Application.Features.Auth.Commands;
 
 public record LogoutCommand(string AccessToken) : IRequest<bool>;
 

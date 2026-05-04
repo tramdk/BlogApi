@@ -8,7 +8,7 @@ Chào mừng bạn đến với Coding Policy của dự án. AI Agent **BẮT B
 *   **Đảm bảo tính chính xác:** Luôn kiểm tra (build/test) lại code sau khi sửa.
 *   **Bảo mật:** Không lưu trữ hard-code mật khẩu, connection strings trong code.
 
-## 2. Quy Tắc Cho Backend (.NET C# - BlogApi)
+## 2. Quy Tắc Cho Backend (.NET C# - FloraCore)
 *   **Kiến trúc:** Dự án tuân theo **Clean Architecture** gồm các tầng cơ bản (Domain, Application, Infrastructure, Web/API).
     *   **Domain:** Chứa Entities (`Product`, `Post`, v.v.). Đây là lõi của ứng dụng, KHÔNG phụ thuộc vào bất kỳ framework bên ngoài nào.
     *   **Application:** Chứa interfaces, DTOs, logic nghiệp vụ, và extensions (`ServiceCollectionExtensions.cs`).

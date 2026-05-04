@@ -1,6 +1,6 @@
-using BlogApi.Application.Features.Posts.DTOs;
+using FloraCore.Application.Features.Posts.DTOs;
 
-namespace BlogApi.Application.Features.Posts.Extensions;
+namespace FloraCore.Application.Features.Posts.Extensions;
 
 public static class UnifiedSearchExtensions
 {

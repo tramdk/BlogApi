@@ -1,10 +1,10 @@
-using BlogApi.Application.Features.Auth.Commands;
+using FloraCore.Application.Features.Auth.Commands;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Asp.Versioning;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 /// <summary>
 /// Controller for authentication operations.

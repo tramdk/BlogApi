@@ -1,6 +1,6 @@
 using System;
 
-namespace BlogApi.Domain.Entities;
+namespace FloraCore.Domain.Entities;
 
 /// <summary>
 /// Entity for the Outbox Pattern to ensure reliable side effects (notifications, emails, etc.)

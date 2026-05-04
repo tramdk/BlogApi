@@ -1,12 +1,12 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
 using MediatR;
 
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.Posts.Commands;
+namespace FloraCore.Application.Features.Posts.Commands;
 
 public record CreatePostCommand(Guid? Id, string Title, string Content, string? CategoryId = null) : IRequest<Guid>;
 

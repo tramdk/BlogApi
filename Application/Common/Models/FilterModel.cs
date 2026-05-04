@@ -1,4 +1,4 @@
-namespace BlogApi.Application.Common.Models;
+namespace FloraCore.Application.Common.Models;
 
 /// <summary>
 /// Generic filter model for dynamic filtering (AG-Grid, MUI DataGrid style)

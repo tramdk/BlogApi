@@ -1,6 +1,6 @@
-using BlogApi.Application.Features.Users.Commands;
-using BlogApi.Application.Features.Users.Queries;
-using BlogApi.Application.Common.Constants;
+using FloraCore.Application.Features.Users.Commands;
+using FloraCore.Application.Features.Users.Queries;
+using FloraCore.Application.Common.Constants;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +8,7 @@ using Asp.Versioning;
 using System;
 using System.Threading.Tasks;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]

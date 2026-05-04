@@ -1,6 +1,6 @@
 using System;
 
-namespace BlogApi.Application.Features.Users.Queries;
+namespace FloraCore.Application.Features.Users.Queries;
 
 public class UserDto
 {

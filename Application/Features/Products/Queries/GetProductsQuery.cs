@@ -1,12 +1,12 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Application.Common.Models;
-using BlogApi.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Application.Common.Models;
+using FloraCore.Domain.Entities;
 using MediatR;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 
-namespace BlogApi.Application.Features.Products.Queries;
+namespace FloraCore.Application.Features.Products.Queries;
 
 public record GetProductsQuery(int PageNumber = 1, int PageSize = 10, string? SearchTerm = null) : IRequest<PagedResult<ProductDto>>;
 

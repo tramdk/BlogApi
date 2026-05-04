@@ -1,4 +1,4 @@
-namespace BlogApi.Domain.ValueObjects;
+namespace FloraCore.Domain.ValueObjects;
 
 /// <summary>
 /// Value object representing a rating score (1-5).

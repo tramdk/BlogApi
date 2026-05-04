@@ -1,6 +1,6 @@
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Application.Common.Interfaces;
 
-namespace BlogApi.Infrastructure.Services;
+namespace FloraCore.Infrastructure.Services;
 
 /// <summary>
 /// Implementation of IDateTimeService for production use.

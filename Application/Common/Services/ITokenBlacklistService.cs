@@ -1,4 +1,4 @@
-namespace BlogApi.Application.Common.Services;
+namespace FloraCore.Application.Common.Services;
 
 public interface ITokenBlacklistService
 {

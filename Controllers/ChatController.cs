@@ -1,5 +1,5 @@
-using BlogApi.Application.Features.Chat.Commands.SendMessage;
-using BlogApi.Application.Features.Chat.Queries.GetChatHistory;
+using FloraCore.Application.Features.Chat.Commands.SendMessage;
+using FloraCore.Application.Features.Chat.Queries.GetChatHistory;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 using Asp.Versioning;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 [Authorize]
 [ApiController]

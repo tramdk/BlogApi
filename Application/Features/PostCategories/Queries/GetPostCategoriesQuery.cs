@@ -1,5 +1,5 @@
-using BlogApi.Domain.Entities;
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.PostCategories.Queries;
+namespace FloraCore.Application.Features.PostCategories.Queries;
 
 public record GetPostCategoriesQuery : IRequest<List<PostCategoryDto>>;
 

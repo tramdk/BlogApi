@@ -1,9 +1,9 @@
-using BlogApi.Application.Common.Interfaces;
-using BlogApi.Domain.Entities;
-using BlogApi.Domain.Exceptions;
+using FloraCore.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
+using FloraCore.Domain.Exceptions;
 using MediatR;
 
-namespace BlogApi.Application.Common.Behaviors;
+namespace FloraCore.Application.Common.Behaviors;
 
 /// <summary>
 /// Pipeline behavior that enforces ownership authorization for requests

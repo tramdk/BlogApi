@@ -1,6 +1,6 @@
 using System;
 
-namespace BlogApi.Application.Common.Interfaces;
+namespace FloraCore.Application.Common.Interfaces;
 
 /// <summary>
 /// Provides information about the currently authenticated user.

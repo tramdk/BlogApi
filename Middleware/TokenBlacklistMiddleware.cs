@@ -1,7 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
-using BlogApi.Application.Common.Services;
+using FloraCore.Application.Common.Services;
 
-namespace BlogApi.Middleware;
+namespace FloraCore.Middleware;
 
 public class TokenBlacklistMiddleware
 {

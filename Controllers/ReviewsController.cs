@@ -1,11 +1,11 @@
-using BlogApi.Application.Features.Reviews.Commands;
+using FloraCore.Application.Features.Reviews.Commands;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using Asp.Versioning;
 
-namespace BlogApi.Controllers;
+namespace FloraCore.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]

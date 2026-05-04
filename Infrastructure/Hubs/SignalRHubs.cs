@@ -1,9 +1,9 @@
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 
-namespace BlogApi.Infrastructure.Hubs;
+namespace FloraCore.Infrastructure.Hubs;
 
 [Authorize]
 public class ChatHub : Hub<IChatClient>

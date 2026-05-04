@@ -1,7 +1,7 @@
-using BlogApi.Application.Common.Models;
-using BlogApi.Application.Features.Posts.DTOs;
+using FloraCore.Application.Common.Models;
+using FloraCore.Application.Features.Posts.DTOs;
 
-namespace BlogApi.Application.Common.Interfaces;
+namespace FloraCore.Application.Common.Interfaces;
 
 public interface IPostQueryService
 {

@@ -2,7 +2,7 @@ using Serilog.Core;
 using Serilog.Events;
 using System.Collections.Generic;
 
-namespace BlogApi.Infrastructure.Logging;
+namespace FloraCore.Infrastructure.Logging;
 
 /// <summary>
 /// Serilog enricher to mask sensitive data in log properties.

@@ -1,11 +1,11 @@
-﻿using BlogApi.Domain.Entities;
-using BlogApi.Application.Common.Interfaces;
+using FloraCore.Domain.Entities;
+using FloraCore.Application.Common.Interfaces;
 using MediatR;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace BlogApi.Application.Features.ProductCategories.Queries;
+namespace FloraCore.Application.Features.ProductCategories.Queries;
 
 public record GetProductCategoryByIdQuery(Guid Id) : IRequest<ProductCategoryDto?>;
 

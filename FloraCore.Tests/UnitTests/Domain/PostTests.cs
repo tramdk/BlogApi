@@ -1,7 +1,7 @@
-using BlogApi.Domain.Entities;
+using FloraCore.Domain.Entities;
 using Xunit;
 
-namespace BlogApi.Tests.UnitTests.Domain;
+namespace FloraCore.Tests.UnitTests.Domain;
 
 public class PostTests
 {
