@@ -289,8 +289,8 @@ Hangfire (every minute):
 
 ```bash
 # 1. Clone
-git clone https://github.com/your-username/blog-api.git
-cd blog-api
+git clone https://github.com/your-username/flora-core.git
+cd flora-core
 
 # 2. Configure
 cp .env.example .env
@@ -308,7 +308,7 @@ dotnet run
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | `admin@blogapi.com` | `Admin123!` |
+| Admin | `admin@floracore.com` | `Admin123!` |
 
 ---
 
@@ -377,8 +377,8 @@ docker-compose up --watch
 ### Manual Docker
 
 ```bash
-docker build -t blog-api .
-docker run -p 8080:8080 --env-file .env blog-api
+docker build -t flora-core .
+docker run -p 8080:8080 --env-file .env flora-core
 ```
 
 ### Kubernetes

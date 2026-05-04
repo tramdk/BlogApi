@@ -34,4 +34,4 @@ jobs:
       run: dotnet test FloraCore.Tests/FloraCore.Tests.csproj --no-build --configuration Release --verbosity normal
 
     - name: Docker Build Check
-      run: docker build -t blog-api-check .
+      run: docker build -t flora-core-check .

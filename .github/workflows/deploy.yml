@@ -63,8 +63,8 @@ jobs:
         cache-to: type=gha,mode=max
         # Tự động lấy tên tag từ git (ví dụ: v1.0) để đặt cho image
         tags: |
-          ${{ secrets.DOCKERHUB_USERNAME }}/blogapi:latest
-          ${{ secrets.DOCKERHUB_USERNAME }}/blogapi:${{ github.ref_name }}
+          ${{ secrets.DOCKERHUB_USERNAME }}/floracore:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/floracore:${{ github.ref_name }}
 
     - name: Notify Deployment
       run: echo "🎉 Image đã được push thành công! Tag=${{ github.ref_name }}"

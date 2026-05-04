@@ -15,7 +15,7 @@ public class PostCategoriesControllerTests : BaseIntegrationTest
     private async Task<string> GetAdminTokenAsync()
     {
         // Search for existing admin or register one
-        var loginCommand = new LoginCommand("admin@blogapi.com", "Admin123!");
+        var loginCommand = new LoginCommand("admin@floracore.com", "Admin123!");
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginCommand);
         
         if (response.StatusCode == HttpStatusCode.OK)

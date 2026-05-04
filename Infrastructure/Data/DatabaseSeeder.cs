@@ -71,7 +71,7 @@ public class DatabaseSeeder
 
     private async Task<AppUser> SeedAdminUserAsync()
     {
-        var adminEmail = "admin@blogapi.com";
+        var adminEmail = "admin@floracore.com";
         var adminUser = await _userManager.FindByEmailAsync(adminEmail);
 
         if (adminUser == null)

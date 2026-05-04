@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: blogapi-ingress
+  name: floracore-ingress
   namespace: default
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
@@ -14,7 +14,7 @@ spec:
   # tls:
   # - hosts:
   #   - api.yourdomain.com
-  #   secretName: blogapi-tls-cert
+  #   secretName: floracore-tls-cert
   
   rules:
   - host: api.yourdomain.com # ⚠️ QUAN TRỌNG: Thay bằng domain thực tế của bạn
@@ -24,6 +24,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: blogapi-service
+            name: floracore-service
             port:
               number: 80

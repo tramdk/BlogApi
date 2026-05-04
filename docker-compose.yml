@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:15-alpine
-    container_name: blog-api-db
+    container_name: flora-core-db
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
@@ -13,7 +13,7 @@ services:
 
   redis:
     image: redis:alpine
-    container_name: blog-api-redis
+    container_name: flora-core-redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
 
@@ -21,7 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: blog-api-service
+    container_name: flora-core-service
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
       - ASPNETCORE_URLS=http://+:8080
