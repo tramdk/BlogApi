@@ -120,6 +120,26 @@ builder.Services.AddResiliencePipeline("external-services", pipelineBuilder =>
     });
 });
 
+// Add Resilient Named HttpClient with Polly pipeline
+builder.Services.AddHttpClient("ResilientClient")
+    .AddResilienceHandler("external-services-pipeline", pipelineBuilder =>
+    {
+        pipelineBuilder.AddRetry(new Polly.Retry.RetryStrategyOptions<HttpResponseMessage>
+        {
+            MaxRetryAttempts = 3,
+            Delay = TimeSpan.FromSeconds(2),
+            BackoffType = DelayBackoffType.Exponential,
+            UseJitter = true
+        })
+        .AddCircuitBreaker(new Polly.CircuitBreaker.CircuitBreakerStrategyOptions<HttpResponseMessage>
+        {
+            FailureRatio = 0.5,
+            SamplingDuration = TimeSpan.FromSeconds(30),
+            MinimumThroughput = 5,
+            BreakDuration = TimeSpan.FromSeconds(15)
+        });
+    });
+
 // Add API Versioning
 builder.Services.AddApiVersioning(options =>
 {

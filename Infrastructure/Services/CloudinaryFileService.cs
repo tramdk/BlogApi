@@ -30,13 +30,14 @@ public class CloudinaryFileService : IFileService
         IGenericRepository<FileMetadata, Guid> repository,
         IOptions<CloudinarySettings> config,
         ICurrentUserService currentUserService,
+        IHttpClientFactory httpClientFactory,
         ResiliencePipelineProvider<string> pipelineProvider)
     {
         _repository = repository;
         _currentUserService = currentUserService;
         var acc = new Account(config.Value.CloudName, config.Value.ApiKey, config.Value.ApiSecret);
         _cloudinary = new Cloudinary(acc);
-        _httpClient = new HttpClient();
+        _httpClient = httpClientFactory.CreateClient("ResilientClient");
         _resiliencePipeline = pipelineProvider.GetPipeline("external-services");
     }
 
@@ -139,8 +140,7 @@ public class CloudinaryFileService : IFileService
             throw new UnauthorizedAccessException("You are not authorized to access this private file.");
 
         var fileUrl = metadata.Url ?? metadata.FilePath;
-        var bytes = await _resiliencePipeline.ExecuteAsync(async ct => 
-            await _httpClient.GetByteArrayAsync(fileUrl));
+        var bytes = await _httpClient.GetByteArrayAsync(fileUrl);
         
         return (bytes, metadata.ContentType, metadata.FileName);
     }
