@@ -33,11 +33,14 @@ services:
       - Cloudinary__CloudName=${CLOUDINARY_CLOUD_NAME}
       - Cloudinary__ApiKey=${CLOUDINARY_API_KEY}
       - Cloudinary__ApiSecret=${CLOUDINARY_API_SECRET}
+      - Telemetry__OtlpEndpoint=http://otel-collector:4317
+      - Telemetry__ExportToConsole=false
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
       - db
       - redis
+      - otel-collector
     volumes:
       - ./uploads:/app/uploads
       - ./Logs:/app/Logs
@@ -53,6 +56,51 @@ services:
             - test_uploads/
             - .git/
             - .vs/
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: flora-core-otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8889:8889" # Prometheus scrape endpoint
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: flora-core-jaeger
+    ports:
+      - "16686:16686" # Web UI
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: flora-core-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: flora-core-grafana
+    volumes:
+      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    ports:
+      - "3100:3000"
+    depends_on:
+      - prometheus
+      - jaeger
 
 volumes:
   postgres_data:

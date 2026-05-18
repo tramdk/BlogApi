@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Identity;
 using OpenTelemetry.Trace;
+using OpenTelemetry.Metrics;
 using Hangfire;
 using Hangfire.PostgreSql;
 using OpenTelemetry.Resources;
@@ -96,13 +97,47 @@ public static class DependencyInjection
 
     public static IServiceCollection AddObservability(this IServiceCollection services, IConfiguration configuration)
     {
+        var otlpEndpoint = configuration["Telemetry:OtlpEndpoint"] ?? "http://localhost:4317";
+
         services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource.AddService("FloraCore"))
             .WithTracing(tracing =>
             {
                 tracing.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddEntityFrameworkCoreInstrumentation()
-                    .AddConsoleExporter(); // For development. Use OTLP for production.
+                    .AddEntityFrameworkCoreInstrumentation();
+
+                if (configuration.GetValue<bool>("Telemetry:ExportToConsole", false))
+                {
+                    tracing.AddConsoleExporter();
+                }
+
+                if (!string.IsNullOrEmpty(otlpEndpoint))
+                {
+                    tracing.AddOtlpExporter(options =>
+                    {
+                        options.Endpoint = new Uri(otlpEndpoint);
+                    });
+                }
+            })
+            .WithMetrics(metrics =>
+            {
+                metrics.AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddRuntimeInstrumentation();
+
+                if (configuration.GetValue<bool>("Telemetry:ExportToConsole", false))
+                {
+                    metrics.AddConsoleExporter();
+                }
+
+                if (!string.IsNullOrEmpty(otlpEndpoint))
+                {
+                    metrics.AddOtlpExporter(options =>
+                    {
+                        options.Endpoint = new Uri(otlpEndpoint);
+                    });
+                }
             });
 
         return services;

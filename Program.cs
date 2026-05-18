@@ -8,6 +8,9 @@ using System.IdentityModel.Tokens.Jwt;
 using AspNetCoreRateLimit;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Text.Json;
 using Asp.Versioning;
 using Scalar.AspNetCore;
 
@@ -44,7 +47,44 @@ builder.Services.AddControllers(options =>
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
 builder.Services.AddOpenApiDocumentation();
-builder.Services.AddHealthChecks();
+// ========== Configure Health Checks ==========
+var databaseProvider = builder.Configuration["DatabaseProvider"] ?? "SqlServer";
+var dbConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+
+var healthChecksBuilder = builder.Services.AddHealthChecks();
+
+if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+{
+    if (!string.IsNullOrEmpty(dbConnectionString))
+    {
+        healthChecksBuilder.AddNpgSql(
+            dbConnectionString,
+            name: "postgresql",
+            failureStatus: HealthStatus.Unhealthy,
+            tags: ["db", "sql", "postgresql"]);
+    }
+}
+else if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+{
+    if (!string.IsNullOrEmpty(dbConnectionString))
+    {
+        healthChecksBuilder.AddSqlServer(
+            dbConnectionString,
+            name: "sqlserver",
+            failureStatus: HealthStatus.Unhealthy,
+            tags: ["db", "sql", "sqlserver"]);
+    }
+}
+
+if (!string.IsNullOrEmpty(redisConnectionString))
+{
+    healthChecksBuilder.AddRedis(
+        redisConnectionString,
+        name: "redis",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["cache", "redis"]);
+}
 
 // Add Response Compression
 builder.Services.AddResponseCompression(options =>
@@ -103,7 +143,26 @@ app.UseCors(FloraCore.Application.Common.Constants.CorsConstants.AllowFrontend);
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseResponseCompression();
 app.UseSerilogRequestLogging();
-app.UseHealthChecks("/health");
+app.UseHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var response = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(entry => new
+            {
+                name = entry.Key,
+                status = entry.Value.Status.ToString(),
+                description = entry.Value.Description,
+                duration = entry.Value.Duration
+            }),
+            totalDuration = report.TotalDuration
+        };
+        await context.Response.WriteAsync(JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true }));
+    }
+});
 
 // Enable Docs in all environments for Demo purpose
 app.UseSwagger(options => options.RouteTemplate = "openapi/{documentName}.json");
