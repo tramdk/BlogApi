@@ -368,6 +368,27 @@ If you want to add support for a new database provider (e.g., MySQL):
 
 ---
 
+## 📊 Observability & Monitoring
+
+FloraCore comes with a fully containerized, production-grade **APM & Observability Stack**. All application metrics and distributed traces are streamed over OTLP to a centralized telemetry pipeline.
+
+*   **Traces**: Auto-captures incoming requests, outgoing HTTP calls, and EF Core database queries (including raw SQL).
+*   **Metrics**: Measures request latency, CPU/memory, and .NET Garbage Collection.
+*   **Health Checks**: Diagnostics endpoint at `/health` returning connection details for PostgreSQL and Redis.
+
+### 📡 Telemetry Services
+
+When running with Docker Compose, you can access the following dashboards:
+
+*   **Grafana**: [http://localhost:3100](http://localhost:3100) (Default login: `admin` / `admin`)
+*   **Jaeger (Traces)**: [http://localhost:16686](http://localhost:16686)
+*   **Prometheus (Metrics)**: [http://localhost:9090](http://localhost:9090)
+*   **Detailed JSON Health Checks**: [http://localhost:8080/health](http://localhost:8080/health)
+
+For a complete architectural overview and configurations, see the **[Observability Guide](./docs/observability.md)**.
+
+---
+
 ## 🐳 Deployment
 
 ### Docker Compose (Recommended)
