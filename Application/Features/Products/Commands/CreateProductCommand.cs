@@ -10,14 +10,9 @@ namespace FloraCore.Application.Features.Products.Commands;
 
 public record CreateProductCommand(Guid? Id, string Name, string Description, decimal Price, int Stock, string? ImageUrl, Guid? CategoryId) : IRequest<Guid>;
 
-public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand, Guid>
+public class CreateProductCommandHandler(IGenericRepository<Product, Guid> productRepository) : IRequestHandler<CreateProductCommand, Guid>
 {
-    private readonly IGenericRepository<Product, Guid> _productRepository;
-
-    public CreateProductCommandHandler(IGenericRepository<Product, Guid> productRepository)
-    {
-        _productRepository = productRepository;
-    }
+    private readonly IGenericRepository<Product, Guid> _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
 
     public async Task<Guid> Handle(CreateProductCommand request, CancellationToken cancellationToken)
     {

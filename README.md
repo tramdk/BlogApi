@@ -335,15 +335,27 @@ REDIS_CONNECTION=localhost:6379
 
 ### Multi-Database Support
 
-| Provider | Config Value | Use Case |
-|----------|-------------|----------|
-| SQL Server | `"SqlServer"` | Local development (default) |
-| PostgreSQL | `"PostgreSQL"` | Docker / Cloud deployment |
+| Provider | Config Value | Dialect Strategy | Use Case |
+|----------|-------------|------------------|----------|
+| SQL Server | `"SqlServer"` | `SqlServerPostQueryDialect` | Local development (default) |
+| PostgreSQL | `"PostgreSQL"` | `PostgresPostQueryDialect` | Docker / Cloud deployment |
+| SQLite / Other | Default / Any | `SqlitePostQueryDialect` | Integration testing |
 
 ```json
 // appsettings.json
-{ "DatabaseProvider": "PostgreSQL" }
+{
+  "DatabaseProvider": "PostgreSQL"
+}
 ```
+
+#### 🛡️ SQL Dialect Strategy Pattern (`IPostQueryDialect`)
+
+To ensure full database engine compatibility and strictly follow the **Open-Closed Principle (OCP)**, raw SQL queries (using Dapper) are decoupled from the query service into dialect-specific strategies.
+
+If you want to add support for a new database provider (e.g., MySQL):
+1. Implement the [IPostQueryDialect](./Application/Common/Interfaces/IPostQueryDialect.cs) interface in the Application/Common layer.
+2. Create your provider-specific implementation (e.g., `MySqlPostQueryDialect`) in the Infrastructure layer.
+3. Update the Dependency Injection registration in **[DependencyInjection.cs](./Infrastructure/DependencyInjection.cs)** to resolve the new dialect when the configured `DatabaseProvider` matches your database.
 
 ### Rate Limiting
 

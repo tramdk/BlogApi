@@ -12,21 +12,14 @@ namespace FloraCore.Application.Features.Cart.Commands;
 
 public record AddToCartCommand(Guid ProductId, int Quantity) : IRequest<Unit>;
 
-public class AddToCartCommandHandler : IRequestHandler<AddToCartCommand, Unit>
+public class AddToCartCommandHandler(
+    IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> cartRepository, 
+    IGenericRepository<CartItem, Guid> cartItemRepository,
+    ICurrentUserService currentUserService) : IRequestHandler<AddToCartCommand, Unit>
 {
-    private readonly IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> _cartRepository;
-    private readonly IGenericRepository<CartItem, Guid> _cartItemRepository;
-    private readonly ICurrentUserService _currentUserService;
-
-    public AddToCartCommandHandler(
-        IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> cartRepository, 
-        IGenericRepository<CartItem, Guid> cartItemRepository,
-        ICurrentUserService currentUserService)
-    {
-        _cartRepository = cartRepository;
-        _cartItemRepository = cartItemRepository;
-        _currentUserService = currentUserService;
-    }
+    private readonly IGenericRepository<FloraCore.Domain.Entities.Cart, Guid> _cartRepository = cartRepository ?? throw new ArgumentNullException(nameof(cartRepository));
+    private readonly IGenericRepository<CartItem, Guid> _cartItemRepository = cartItemRepository ?? throw new ArgumentNullException(nameof(cartItemRepository));
+    private readonly ICurrentUserService _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
 
     public async Task<Unit> Handle(AddToCartCommand request, CancellationToken cancellationToken)
     {

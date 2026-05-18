@@ -47,6 +47,21 @@ public static class DependencyInjection
         // Repositories
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
+        
+        // Register IPostQueryDialect strategy dynamically based on DatabaseProvider
+        if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IPostQueryDialect, PostgresPostQueryDialect>();
+        }
+        else if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IPostQueryDialect, SqlServerPostQueryDialect>();
+        }
+        else
+        {
+            services.AddSingleton<IPostQueryDialect, SqlitePostQueryDialect>();
+        }
+
         services.AddScoped<IPostQueryService, PostQueryService>();
 
         // Services
