@@ -536,46 +536,75 @@ class AIDeveloperHarness:
         print(f"   👉 '{task_description}'")
         print(f"=============================================================")
         
+        # Đọc chính sách lập trình cục bộ của dự án (CODING_POLICY.md hoặc CLAUDE.md)
+        policy_content = ""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.dirname(script_dir)
+        policy_files = ["CODING_POLICY.md", "CLAUDE.md"]
+        for p_file in policy_files:
+            p_path = os.path.join(root_dir, p_file)
+            if os.path.exists(p_path):
+                try:
+                    with open(p_path, "r", encoding="utf-8") as f:
+                        policy_content = f.read()
+                    print(f"📖 [Harness Control]: Đang nạp chính sách lập trình từ '{p_file}'...")
+                    break
+                except Exception as e:
+                    print(f"⚠️ [Harness Control]: Lỗi đọc file {p_file}: {e}")
+
         system_instruction = (
             "Bạn là một Kỹ sư .NET 9 Senior, làm việc trên dự án FloraCore (Clean Architecture + CQRS + MediatR + xUnit).\n"
             "Nhiệm vụ của bạn là giải quyết yêu cầu của người dùng bằng cách đọc/viết code và chạy kiểm thử tự động.\n\n"
-            "--- BẮT BUỘC TUÂN THỦ CHẶT CHẼ CODING POLICY CỦA DỰ ÁN ---\n"
-            "1. KIẾN TRÚC SẠCH (Clean Architecture):\n"
-            "   - Domain Layer: Lõi của dự án, KHÔNG phụ thuộc vào thư viện ngoài. Chứa Entities.\n"
-            "   - Application Layer: Chứa CQRS Commands/Queries, Handlers (MediatR), DTOs, Interfaces và Validators.\n"
-            "   - Infrastructure Layer: Chứa AppDbContext, Repository implementations, migrations và tích hợp DB.\n"
-            "   - Web/API Layer: Chỉ chứa Controllers rất mỏng (thin controllers), ủy quyền xử lý hoàn toàn cho Application thông qua MediatR.\n"
-            "   - Hướng phụ thuộc: Domain <- Application <- Infrastructure <- Controllers. Tuyệt đối không đảo ngược chiều.\n"
-            "2. MODERN C# & .NET 9:\n"
-            "   - Khuyến khích dùng 'record' thay cho class đối với DTOs, Commands và Queries (bất biến - immutable).\n"
-            "   - Sử dụng File-scoped namespaces thay cho block namespaces để giảm thụt lề.\n"
-            "   - Bật và xử lý triệt để Nullable Reference Types.\n"
-            "3. LẬP TRÌNH BẤT ĐỒNG BỘ (Asynchronous):\n"
-            "   - Luôn dùng 'async/await' cho các tác vụ I/O (Database, Network, File).\n"
-            "   - Các hàm bất đồng bộ bắt buộc phải có hậu tố 'Async' (ví dụ: GetProductByIdAsync).\n"
-            "   - TUYỆT ĐỐI KHÔNG dùng '.Result' hoặc '.Wait()' để tránh gây Deadlock. Hãy truyền CancellationToken nếu có thể.\n"
-            "4. THAY ĐỔI PHẪU THUẬT (Surgical Changes):\n"
-            "   - Chỉ sửa đổi chính xác những dòng code cần thiết để giải quyết yêu cầu.\n"
-            "   - Không tự ý tái cấu trúc (refactor) hoặc chỉnh sửa định dạng/comment ở các phần code xung quanh đang chạy ổn định.\n"
-            "   - Loại bỏ các thư viện imports/using và biến không dùng đến phát sinh do chính thay đổi của bạn.\n"
-            "5. ĐẢM BẢO CHẤT LƯỢNG:\n"
-            "   - Sử dụng FluentValidation để validate dữ liệu ở Backend.\n"
-            "   - Viết tests tuân thủ chuẩn AAA (Arrange - Act - Assert).\n\n"
-            "--- BẮT BUỘC TUÂN THỦ .NET/C# BEST PRACTICES & DESIGN PATTERNS (AGENTS SKILLS) ---\n"
-            "1. XML DOCUMENTATION:\n"
-            "   - Viết XML documentation comments (sử dụng dấu '///') đầy đủ cho TẤT CẢ các public classes, interfaces, methods và properties.\n"
-            "   - Ghi rõ mô tả cho từng tham số (<param>) và giá trị trả về (<returns>) trong tài liệu XML.\n"
-            "2. DEPENDENCY INJECTION & CONSTRUCTORS:\n"
-            "   - Bắt buộc dùng cú pháp Primary Constructor của C# 12+ cho DI (ví dụ: 'public class MyService(IDependency dependency)').\n"
-            "   - Thực hiện kiểm tra null bằng ArgumentNullException cho các dependency (ví dụ: 'ArgumentNullException.ThrowIfNull(dependency)').\n"
-            "3. THIẾT KẾ CÁC DESIGN PATTERNS CHUẨN:\n"
-            "   - Command Pattern: Triển khai CQRS Commands/Queries thông qua Handlers độc lập kế thừa MediatR interfaces.\n"
-            "   - Repository Pattern: Tương tác database thông qua các interfaces trừu tượng hóa để đảm bảo khả năng unit test và mock dễ dàng.\n"
-            "   - Resource Pattern: Sử dụng ResourceManager cho các chuỗi thông báo, phân chia log và lỗi (.resx files).\n"
-            "4. BỘ TIÊU CHUẨN KIỂM THỬ:\n"
-            "   - Sử dụng xUnit phối hợp cùng FluentAssertions để viết các khẳng định test sạch sẽ.\n"
-            "   - Sử dụng Moq để tạo dữ liệu giả lập cho các phụ thuộc bên ngoài khi viết Unit Tests.\n"
-            "   - Luôn test cả hai kịch bản Thành công (Success) và Thất bại (Failure), bao gồm cả kiểm chứng tham số null.\n\n"
+        )
+
+        if policy_content:
+            system_instruction += (
+                "--- CHÍNH SÁCH LẬP TRÌNH CỤC BỘ BẮT BUỘC (CODING_POLICY.md) ---\n"
+                "Bạn BẮT BUỘC phải tuyệt đối tuân thủ chính sách lập trình của dự án dưới đây trong mọi thay đổi mã nguồn:\n"
+                f"{policy_content}\n\n"
+            )
+        else:
+            system_instruction += (
+                "--- BẮT BUỘC TUÂN THỦ CHẶT CHẼ CODING POLICY CỦA DỰ ÁN ---\n"
+                "1. KIẾN TRÚC SẠCH (Clean Architecture):\n"
+                "   - Domain Layer: Lõi của dự án, KHÔNG phụ thuộc vào thư viện ngoài. Chứa Entities.\n"
+                "   - Application Layer: Chứa CQRS Commands/Queries, Handlers (MediatR), DTOs, Interfaces và Validators.\n"
+                "   - Infrastructure Layer: Chứa AppDbContext, Repository implementations, migrations và tích hợp DB.\n"
+                "   - Web/API Layer: Chỉ chứa Controllers rất mỏng (thin controllers), ủy quyền xử lý hoàn toàn cho Application thông qua MediatR.\n"
+                "   - Hướng phụ thuộc: Domain <- Application <- Infrastructure <- Controllers. Tuyệt đối không đảo ngược chiều.\n"
+                "2. MODERN C# & .NET 9:\n"
+                "   - Khuyến khích dùng 'record' thay cho class đối với DTOs, Commands và Queries (bất biến - immutable).\n"
+                "   - Sử dụng File-scoped namespaces thay cho block namespaces để giảm thụt lề.\n"
+                "   - Bật và xử lý triệt để Nullable Reference Types.\n"
+                "3. LẬP TRÌNH BẤT ĐỒNG BỘ (Asynchronous):\n"
+                "   - Luôn dùng 'async/await' cho các tác vụ I/O (Database, Network, File).\n"
+                "   - Các hàm bất đồng bộ bắt buộc phải có hậu tố 'Async' (ví dụ: GetProductByIdAsync).\n"
+                "   - TUYỆT ĐỐI KHÔNG dùng '.Result' hoặc '.Wait()' để tránh gây Deadlock. Hãy truyền CancellationToken nếu có thể.\n"
+                "4. THAY ĐỔI PHẪU THUẬT (Surgical Changes):\n"
+                "   - Chỉ sửa đổi chính xác những dòng code cần thiết để giải quyết yêu cầu.\n"
+                "   - Không tự ý tái cấu trúc (refactor) hoặc chỉnh sửa định dạng/comment ở các phần code xung quanh đang chạy ổn định.\n"
+                "   - Loại bỏ các thư viện imports/using và biến không dùng đến phát sinh do chính thay đổi của bạn.\n"
+                "5. ĐẢM BẢO CHẤT LƯỢNG:\n"
+                "   - Sử dụng FluentValidation để validate dữ liệu ở Backend.\n"
+                "   - Viết tests tuân thủ chuẩn AAA (Arrange - Act - Assert).\n\n"
+                "--- BẮT BUỘC TUÂN THỦ .NET/C# BEST PRACTICES & DESIGN PATTERNS (AGENTS SKILLS) ---\n"
+                "1. XML DOCUMENTATION:\n"
+                "   - Viết XML documentation comments (sử dụng dấu '///') đầy đủ cho TẤT CẢ các public classes, interfaces, methods và properties.\n"
+                "   - Ghi rõ mô tả cho từng tham số (<param>) và giá trị trả về (<returns>) trong tài liệu XML.\n"
+                "2. DEPENDENCY INJECTION & CONSTRUCTORS:\n"
+                "   - Bắt buộc dùng cú pháp Primary Constructor của C# 12+ cho DI (ví dụ: 'public class MyService(IDependency dependency)').\n"
+                "   - Thực hiện kiểm tra null bằng ArgumentNullException cho các dependency (ví dụ: 'ArgumentNullException.ThrowIfNull(dependency)').\n"
+                "3. THIẾT KẾ CÁC DESIGN PATTERNS CHUẨN:\n"
+                "   - Command Pattern: Triển khai CQRS Commands/Queries thông qua Handlers độc lập kế thừa MediatR interfaces.\n"
+                "   - Repository Pattern: Tương tác database thông qua các interfaces trừu tượng hóa để đảm bảo khả năng unit test và mock dễ dàng.\n"
+                "   - Resource Pattern: Sử dụng ResourceManager cho các chuỗi thông báo, phân chia log và lỗi (.resx files).\n"
+                "4. BỘ TIÊU CHUẨN KIỂM THỬ:\n"
+                "   - Sử dụng xUnit phối hợp cùng FluentAssertions để viết các khẳng định test sạch sẽ.\n"
+                "   - Sử dụng Moq để tạo dữ liệu giả lập cho các phụ thuộc bên ngoài khi viết Unit Tests.\n"
+                "   - Luôn test cả hai kịch bản Thành công (Success) và Thất bại (Failure), bao gồm cả kiểm chứng tham số null.\n\n"
+            )
+
+        system_instruction += (
             "--- QUY TRÌNH HÀNH ĐỘNG REACT LOOP ---\n"
             "Trong mỗi lượt phản hồi, bạn BẮT BUỘC phải đưa ra cấu trúc định dạng sau:\n"
             "THOUGHT: Phân tích kỹ thuật của bạn về bước kế tiếp và các file cần đọc/ghi.\n"
@@ -882,8 +911,27 @@ class AIDeveloperHarness:
             with open(self.log_file, "a", encoding="utf-8") as f:
                 f.write(f"\nOBSERVATION:\n{observation}\n")
                 
+            # 📉 [OpenHands Context Condensation]: Nén lịch sử ngữ cảnh để tiết kiệm token và tránh trôi ngữ cảnh
+            condensed_observation = observation
+            if "=== OBSERVATION ===" in observation:
+                if action_name == "read_source":
+                    filepath = parsed_args[0] if len(parsed_args) > 0 else ""
+                    condensed_observation = format_observation(
+                        status="SUCCESS",
+                        summary=f"Đọc file '{filepath}' thành công.",
+                        details="(Nội dung chi tiết của file đã được lưu vào bộ nhớ ngữ cảnh làm việc của bạn ở lượt trước, vui lòng không yêu cầu đọc lại trừ khi thực sự cần thiết.)",
+                        artifacts=[filepath]
+                    )
+                elif action_name == "execute_command" and "SUCCESS" in observation and len(observation) > 1000:
+                    cmd = parsed_args[0] if len(parsed_args) > 0 else ""
+                    condensed_observation = format_observation(
+                        status="SUCCESS",
+                        summary=f"Thực thi lệnh '{cmd}' thành công.",
+                        details="(Log thực thi thành công chi tiết đã được lược bỏ để tiết kiệm token ngữ cảnh.)"
+                    )
+
             # Cập nhật lịch sử để Agent suy nghĩ cho lượt kế tiếp
-            context_history += f"\nLượt {self.iteration_count}:\n{response}\nOBSERVATION: {observation}\n"
+            context_history += f"\nLượt {self.iteration_count}:\n{response}\nOBSERVATION: {condensed_observation}\n"
             
             # Nếu nhận được critique từ evaluator, chúng tôi hoàn lại số lượt lặp để agent có đủ cơ hội chỉnh sửa
             if action_name == "finish_task" and score < self.pass_threshold:
