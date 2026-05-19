@@ -1,3 +1,4 @@
+using FloraCore.Application.Interfaces;
 using FloraCore.Application.Common.Interfaces;
 using FloraCore.Application.Common.Services;
 using FloraCore.Application.Common.Models;
@@ -48,6 +49,7 @@ public static class DependencyInjection
         // Repositories
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
+        services.AddScoped<IProductRepository, ProductRepository>();
         
         // Register IPostQueryDialect strategy dynamically based on DatabaseProvider
         if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))

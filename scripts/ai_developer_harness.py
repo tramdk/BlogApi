@@ -111,6 +111,45 @@ def extract_test_errors(output: str) -> list[str]:
         errors.append(f"⚠️ Test case thất bại: {match.strip()}")
     return errors
 
+def check_csharp_linting() -> str:
+    """Kiểm tra linter (dotnet format) đối với các tệp C# đã bị thay đổi trong nhánh hiện tại."""
+    try:
+        # Lấy danh sách các file thay đổi từ git
+        result = subprocess.run("git status --porcelain", shell=True, capture_output=True, encoding='utf-8')
+        if result.returncode != 0:
+            return ""
+            
+        csharp_files = []
+        for line in result.stdout.splitlines():
+            # git status porcelain format: XY path
+            parts = line.strip().split(maxsplit=1)
+            if len(parts) < 2:
+                continue
+            path = parts[1].strip()
+            if path.endswith(".cs") and os.path.exists(path):
+                csharp_files.append(path)
+                
+        if not csharp_files:
+            return ""
+            
+        print(f"🧹 [Harness Linter]: Đang kiểm tra định dạng (dotnet format) cho {len(csharp_files)} tệp C# thay đổi...")
+        # Ghép các tệp cách nhau bằng dấu cách
+        files_str = " ".join(csharp_files)
+        # Chạy dotnet format với bộ lọc chỉ quét các file thay đổi
+        lint_code, lint_out = run_dotnet_command(f"dotnet format --include {files_str} --verify-no-changes")
+        
+        if lint_code != 0:
+            # Lọc ra các dòng báo lỗi linter WHITESPACE hoặc STYLE
+            lint_errors = []
+            for line in lint_out.splitlines():
+                if "error WHITESPACE" in line or "error STYLE" in line or "error analyzer" in line:
+                    lint_errors.append(f"Format Violation: {line.strip()}")
+            if lint_errors:
+                return "\n🧹 CÁC LỖI ĐỊNH DẠNG CODE (LINT VIOLATIONS):\n" + "\n".join(lint_errors[:15]) + ("\n...[còn nhiều lỗi khác]..." if len(lint_errors) > 15 else "") + "\n"
+        return ""
+    except Exception as e:
+        return f"\nLỗi khi chạy Harness Linter: {str(e)}\n"
+
 def format_observation(status: str, summary: str, details: str, next_actions: list[str] = None, artifacts: list[str] = None) -> str:
     """Tiêu chuẩn hóa định dạng quan sát (Observation) trả về cho AI Agent."""
     obs = "=== OBSERVATION ===\n"
@@ -348,10 +387,25 @@ class AIDeveloperHarness:
         print("🧪 [Harness Evaluator]: Chạy kiểm thử tự động phục vụ thang điểm Functionality...")
         test_code, test_out = run_dotnet_command("dotnet test")
         
-        # Đếm số lượng test
+        # Đếm số lượng test và trích xuất lỗi biên dịch/lỗi kiểm thử
         total_tests = 0
         passed_tests = 0
         failed_tests = 0
+        
+        compiler_errors = extract_compiler_errors(test_out)
+        test_failures = extract_test_errors(test_out)
+        
+        error_summary = ""
+        if compiler_errors:
+            error_summary += "\n🚨 CÁC LỖI BIÊN DỊCH PHÁT HIỆN ĐƯỢC:\n" + "\n".join(compiler_errors) + "\n"
+        if test_failures:
+            error_summary += "\n⚠️ CÁC BÀI KIỂM THỬ BỊ THẤT BẠI:\n" + "\n".join(test_failures) + "\n"
+            
+        # Chạy kiểm tra định dạng code linter
+        lint_violations = check_csharp_linting()
+        if lint_violations:
+            error_summary += lint_violations
+            
         if "Passed!" in test_out or "Passed" in test_out:
             # Ví dụ: Passed!  - Failed:     0, Passed:    36, Skipped:     0, Total:    36
             match = re.search(r"Failed:\s*(\d+),\s*Passed:\s*(\d+)", test_out)
@@ -362,18 +416,18 @@ class AIDeveloperHarness:
             else:
                 passed_tests = 36
                 total_tests = 36
-        elif test_code != 0:
-            failed_tests = 1  # Có lỗi xảy ra
+        elif test_code != 0 or compiler_errors:
+            failed_tests = 1  # Có lỗi xảy ra hoặc lỗi biên dịch
             total_tests = 36
             
         func_score = 0.0
-        if test_code == 0:
+        if test_code == 0 and not compiler_errors:
             if total_tests > 0:
                 func_score = (passed_tests / total_tests) * 10.0
             else:
                 func_score = 10.0
         else:
-            func_score = 0.0 # Thất bại hoàn toàn
+            func_score = 0.0 # Thất bại hoàn toàn do lỗi compile hoặc lỗi test
             
         # 2. Lấy Git Diff
         git_diff = ""
@@ -392,11 +446,15 @@ class AIDeveloperHarness:
             except Exception:
                 git_diff = ""
                 
-        # 3. Tạo Prompt cho Evaluator
+        # 3. Tạo Prompt cho Evaluator với các nguyên tắc cực kỳ nghiêm ngặt
         evaluator_system = (
             "Bạn là một Adversarial Evaluator (Nhà đánh giá đối nghịch) cực kỳ nghiêm khắc và có chuyên môn cao về .NET 9.\n"
             "Nhiệm vụ của bạn là đánh giá những thay đổi code của Generator Agent dựa trên git diff và kết quả test.\n"
             "Hãy phê bình thẳng thắn, phát hiện mọi lỗi dù là nhỏ nhất. Đừng khen ngợi những đoạn code sơ sài.\n\n"
+            "⚠️ BẮT BUỘC TUÂN THỦ NGUYÊN TẮC AN TOÀN BIÊN DỊCH:\n"
+            "- NẾU trong kết quả kiểm thử tự động có bất kỳ lỗi biên dịch (Compiler Errors) hoặc lỗi kiểm thử (Test Failures) nào, "
+            "hoặc nếu Điểm Functionality tự động là 0.0, bạn BẮT BUỘC phải đánh giá điểm số 'functionality' là 0.0 và đặt 'weighted_score' DƯỚI 5.0.\n"
+            "- Tuyệt đối KHÔNG ĐƯỢC CHẤP THUẬN (weighted_score phải < 7.5) đối với bất kỳ mã nguồn nào bị lỗi biên dịch hoặc lỗi test, bất kể thiết kế có đẹp thế nào.\n\n"
             "--- RUBRIC ĐÁNH GIÁ (Thang điểm 1.0 - 10.0) ---\n"
             "1. DESIGN QUALITY (Trọng số 0.3): Sự tuân thủ Clean Architecture. (Domain không có phụ thuộc ngoài, CQRS Commands/Queries tách biệt rõ ràng, thin controllers).\n"
             "2. ORIGINALITY & BEST PRACTICES (Trọng số 0.2): Sử dụng C# 13, Primary Constructors, File-Scoped Namespaces, Async/Await chuẩn chỉ.\n"
@@ -417,7 +475,10 @@ class AIDeveloperHarness:
         eval_prompt = (
             f"Yêu cầu nhiệm vụ: {task}\n\n"
             f"Điểm Functionality tự động: {func_score:.1f}/10.0\n"
-            f"Đầu ra Test tự động: {test_out[:500]}...\n\n"
+            f"Tóm tắt trạng thái biên dịch/kiểm thử:\n"
+            f"{error_summary if error_summary else '✅ Đã vượt qua toàn bộ quá trình biên dịch và kiểm thử thành công!'}\n\n"
+            f"Đầu ra Console Test chi tiết (Tối đa 8000 ký tự):\n"
+            f"```text\n{test_out[:8000]}\n```\n\n"
             f"Bản Git Diff của các thay đổi mới:\n"
             f"```diff\n{git_diff[:8000]}\n```\n\n"
             "Hãy đánh giá chi tiết theo Rubric và chấm điểm nghiêm khắc."
@@ -781,11 +842,31 @@ class AIDeveloperHarness:
                     else:
                         gan_retries += 1
                         print(f"\n❌ [Harness Critique]: Không vượt qua kiểm duyệt! Đang gửi phản hồi cải tiến cho Agent sửa đổi...")
+                        
+                        # 🔄 [HỆ THỐNG PHỤC HỒI]: Tự động rollback các tệp đã thay đổi chưa commit để bắt đầu lại sạch sẽ
+                        print("\n🔄 [Harness Recovery]: Đang tự động khôi phục workspace sạch (Git Rollback) để Agent sửa đổi hướng đi mới...")
+                        rollback_message = ""
+                        try:
+                            # Khôi phục các tệp chưa commit để dọn rác lỗi biên dịch cũ
+                            subprocess.run("git checkout -- .", shell=True, capture_output=True)
+                            # Xóa các file mới untracked để tránh lỗi biên dịch của C# quét đệ quy
+                            subprocess.run("git clean -fd", shell=True, capture_output=True)
+                            
+                            rollback_message = (
+                                "\n\n🔄 [HỆ THỐNG PHỤC HỒI]: Harness đã tự động khôi phục toàn bộ workspace (git checkout -- . && git clean -fd) "
+                                "về trạng thái commit sạch gần nhất nhằm dọn dẹp triệt để các lỗi biên dịch hoặc các file bị tạo sai vị trí. "
+                                "Hãy thiết kế một hướng giải quyết mới, an toàn hơn để thực hiện lại nhiệm vụ!"
+                            )
+                            print("✅ [Harness Recovery]: Khôi phục workspace sạch thành công!")
+                        except Exception as e:
+                            rollback_message = f"\n\n🔄 [HỆ THỐNG PHỤC HỒI]: Lỗi khi cố gắng khôi phục workspace: {str(e)}"
+                            print(f"❌ [Harness Recovery]: Thất bại: {e}")
+                            
                         observation = format_observation(
                             status="ERROR",
                             summary=f"Hệ thống đánh giá đối nghịch từ chối phê duyệt (Điểm: {score:.2f} < {self.pass_threshold}).",
-                            details=report,
-                            next_actions=["Hãy chỉnh sửa code dựa trên các điểm phê bình trong phần DETAILS.", "Viết thêm tài liệu XML và kiểm tra kỹ logic."]
+                            details=report + rollback_message,
+                            next_actions=["Dựa trên các điểm phê bình trong DETAILS và workspace sạch đã được khôi phục, hãy viết lại giải pháp đúng đắn."]
                         )
                 else:
                     observation = format_observation(

@@ -1,6 +1,8 @@
 using FloraCore.Application.Common.Models;
 using FloraCore.Application.Features.Products.Commands;
 using FloraCore.Application.Features.Products.Queries;
+using FloraCore.Application.Products.DTOs;
+using FloraCore.Application.Products.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,6 +36,17 @@ public class ProductsController(IMediator mediator) : ControllerBase
     public async Task<ActionResult<PagedResult<ProductDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? search = null)
     {
         return Ok(await _mediator.Send(new GetProductsQuery(page, pageSize, search)));
+    }
+
+    /// <summary>
+    /// Searches for products based on a search term.
+    /// </summary>
+    /// <param name="searchTerm">The search term.</param>
+    /// <returns>A list of product search results.</returns>
+    [HttpGet("search")]
+    public async Task<ActionResult<List<ProductSearchResultDto>>> Search([FromQuery] string searchTerm)
+    {
+        return Ok(await _mediator.Send(new SearchProductsQuery(searchTerm)));
     }
 
     /// <summary>
