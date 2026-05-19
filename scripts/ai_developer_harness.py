@@ -693,52 +693,73 @@ class AIDeveloperHarness:
                         
                 elif action_name == "read_source":
                     filepath = parsed_args[0] if len(parsed_args) > 0 else ""
-                    content = read_source_file(filepath)
                     
-                    status = "SUCCESS" if not content.startswith("Lỗi đọc file:") else "ERROR"
-                    summary = f"Đọc file '{filepath}' thành công." if status == "SUCCESS" else content
-                    
-                    # Tránh làm quá tải context nếu file quá dài
-                    details = content
-                    if len(content) > 12000:
-                        details = content[:12000] + "\n\n...[FILE BỊ CẮT GIẢM VÌ QUÁ DÀI - TRÁNH VƯỢT QUÁ NGỮ CẢNH]..."
+                    # Kiểm tra bảo mật đường dẫn nhạy cảm
+                    normalized_path = filepath.lower().replace("\\", "/")
+                    if "ai_developer_harness.py" in normalized_path or ".env" in normalized_path:
+                        observation = format_observation(
+                            status="ERROR",
+                            summary="Lỗi bảo mật Harness.",
+                            details="Harness không cho phép đọc trực tiếp file cấu hình nhạy cảm (.env) hoặc file chạy của chính Harness (ai_developer_harness.py).",
+                            next_actions=["Hãy đọc các file nguồn dự án khác."]
+                        )
+                    else:
+                        content = read_source_file(filepath)
                         
-                    observation = format_observation(
-                        status=status,
-                        summary=summary,
-                        details=details,
-                        artifacts=[filepath]
-                    )
+                        status = "SUCCESS" if not content.startswith("Lỗi đọc file:") else "ERROR"
+                        summary = f"Đọc file '{filepath}' thành công." if status == "SUCCESS" else content
+                        
+                        # Tránh làm quá tải context nếu file quá dài
+                        details = content
+                        if len(content) > 12000:
+                            details = content[:12000] + "\n\n...[FILE BỊ CẮT GIẢM VÌ QUÁ DÀI - TRÁNH VƯỢT QUÁ NGỮ CẢNH]..."
+                            
+                        observation = format_observation(
+                            status=status,
+                            summary=summary,
+                            details=details,
+                            artifacts=[filepath]
+                        )
                     
                 elif action_name == "write_source":
                     filepath = parsed_args[0] if len(parsed_args) > 0 else ""
                     content = parsed_args[1] if len(parsed_args) > 1 else ""
                     
-                    # Hiển thị Preview thay đổi trước khi phê duyệt
-                    print(f"\n==========================================")
-                    print(f"📄 PREVIEW NỘI DUNG SẮP GHI VÀO FILE: '{filepath}'")
-                    print(f"==========================================")
-                    print(content[:500] + ("\n...[còn tiếp]..." if len(content) > 500 else ""))
-                    print(f"==========================================\n")
-                    
-                    if self.ask_approval(f"Agent muốn ghi/sửa đổi nội dung file: '{filepath}'"):
-                        res = write_source_file(filepath, content)
-                        status = "SUCCESS" if res == "Ghi file thành công." else "ERROR"
-                        
-                        observation = format_observation(
-                            status=status,
-                            summary=f"Ghi file '{filepath}' thành công." if status == "SUCCESS" else res,
-                            details=res,
-                            artifacts=[filepath]
-                        )
-                    else:
-                        print("🛡️  [Harness]: Từ chối ghi file theo yêu cầu của bạn.")
+                    # Kiểm tra bảo mật đường dẫn nhạy cảm
+                    normalized_path = filepath.lower().replace("\\", "/")
+                    if "ai_developer_harness.py" in normalized_path or ".env" in normalized_path:
                         observation = format_observation(
                             status="ERROR",
-                            summary="Người dùng từ chối ghi file.",
-                            details="Người dùng từ chối phê duyệt ghi tệp tin lên đĩa cứng.",
-                            next_actions=["Hỏi lại ý kiến hoặc điều chỉnh nội dung khác."]
+                            summary="Lỗi bảo mật Harness.",
+                            details="Harness nghiêm cấm ghi đè hoặc sửa đổi file cấu hình nhạy cảm (.env) hoặc file chạy của chính Harness (ai_developer_harness.py).",
+                            next_actions=["Hãy chỉnh sửa các file nguồn dự án khác."]
                         )
+                    else:
+                        # Hiển thị Preview thay đổi trước khi phê duyệt
+                        print(f"\n==========================================")
+                        print(f"📄 PREVIEW NỘI DUNG SẮP GHI VÀO FILE: '{filepath}'")
+                        print(f"==========================================")
+                        print(content[:500] + ("\n...[còn tiếp]..." if len(content) > 500 else ""))
+                        print(f"==========================================\n")
+                        
+                        if self.ask_approval(f"Agent muốn ghi/sửa đổi nội dung file: '{filepath}'"):
+                            res = write_source_file(filepath, content)
+                            status = "SUCCESS" if res == "Ghi file thành công." else "ERROR"
+                            
+                            observation = format_observation(
+                                status=status,
+                                summary=f"Ghi file '{filepath}' thành công." if status == "SUCCESS" else res,
+                                details=res,
+                                artifacts=[filepath]
+                            )
+                        else:
+                            print("🛡️  [Harness]: Từ chối ghi file theo yêu cầu của bạn.")
+                            observation = format_observation(
+                                status="ERROR",
+                                summary="Người dùng từ chối ghi file.",
+                                details="Người dùng từ chối phê duyệt ghi tệp tin lên đĩa cứng.",
+                                next_actions=["Hỏi lại ý kiến hoặc điều chỉnh nội dung khác."]
+                            )
                         
                 elif action_name == "finish_task":
                     msg = parsed_args[0] if len(parsed_args) > 0 else ""
