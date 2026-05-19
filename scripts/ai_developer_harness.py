@@ -38,7 +38,8 @@ def run_dotnet_command(command: str) -> tuple[int, str]:
             command,
             shell=True,
             capture_output=True,
-            text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=120  # Timeout 2 phút tránh treo đúp
         )
         output = result.stdout + "\n" + result.stderr
@@ -59,8 +60,10 @@ def read_source_file(file_path: str) -> str:
 def write_source_file(file_path: str, content: str) -> str:
     """Ghi nội dung mới vào một file nguồn."""
     try:
-        # Tự động tạo thư mục cha nếu chưa có
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        # Tự động tạo thư mục cha nếu chưa có và path không rỗng
+        dir_name = os.path.dirname(file_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
         return "Ghi file thành công."
@@ -376,7 +379,7 @@ class AIDeveloperHarness:
         git_diff = ""
         try:
             # uncommitted changes
-            result = subprocess.run("git diff HEAD", shell=True, capture_output=True, text=True)
+            result = subprocess.run("git diff HEAD", shell=True, capture_output=True, encoding='utf-8', errors='replace')
             git_diff = result.stdout or ""
         except Exception:
             git_diff = ""
@@ -384,7 +387,7 @@ class AIDeveloperHarness:
         if not git_diff or not git_diff.strip():
             try:
                 # Nếu không có thay đổi uncommitted, lấy diff của commit cuối cùng
-                result = subprocess.run("git diff HEAD~1", shell=True, capture_output=True, text=True)
+                result = subprocess.run("git diff HEAD~1", shell=True, capture_output=True, encoding='utf-8', errors='replace')
                 git_diff = result.stdout or ""
             except Exception:
                 git_diff = ""
