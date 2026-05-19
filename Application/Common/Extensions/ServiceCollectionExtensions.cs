@@ -14,6 +14,11 @@ using Microsoft.IdentityModel.Tokens;
 using FloraCore.Application.Common.Constants;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Polly;
+using Polly.Retry;
+using Polly.CircuitBreaker;
+using Microsoft.Extensions.Http.Resilience;
 
 namespace FloraCore.Application.Common.Extensions;
 
@@ -237,6 +242,121 @@ public static class ServiceCollectionExtensions
                 options.IncludeXmlComments(xmlPath);
             }
         });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Add Health Checks for DB providers (PostgreSQL / SQL Server) and Redis.
+    /// </summary>
+    public static IServiceCollection AddAppHealthChecks(this IServiceCollection services, IConfiguration configuration)
+    {
+        var databaseProvider = configuration["DatabaseProvider"] ?? "SqlServer";
+        var dbConnectionString = configuration.GetConnectionString("DefaultConnection");
+        var redisConnectionString = configuration.GetConnectionString("Redis");
+
+        var healthChecksBuilder = services.AddHealthChecks();
+
+        if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrEmpty(dbConnectionString))
+            {
+                healthChecksBuilder.AddNpgSql(
+                    dbConnectionString,
+                    name: "postgresql",
+                    failureStatus: HealthStatus.Unhealthy,
+                    tags: ["db", "sql", "postgresql"]);
+            }
+        }
+        else if (databaseProvider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrEmpty(dbConnectionString))
+            {
+                healthChecksBuilder.AddSqlServer(
+                    dbConnectionString,
+                    name: "sqlserver",
+                    failureStatus: HealthStatus.Unhealthy,
+                    tags: ["db", "sql", "sqlserver"]);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(redisConnectionString))
+        {
+            healthChecksBuilder.AddRedis(
+                redisConnectionString,
+                name: "redis",
+                failureStatus: HealthStatus.Unhealthy,
+                tags: ["cache", "redis"]);
+        }
+
+        return services;
+    }
+
+    /// <summary>
+    /// Add Response Compression with Brotli and Gzip providers.
+    /// </summary>
+    public static IServiceCollection AddAppResponseCompression(this IServiceCollection services)
+    {
+        services.AddResponseCompression(options =>
+        {
+            options.EnableForHttps = true;
+            options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+            options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+            options.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults.MimeTypes.Concat(
+                ["application/json", "text/plain", "image/svg+xml"]);
+        });
+
+        services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(options =>
+        {
+            options.Level = System.IO.Compression.CompressionLevel.Optimal;
+        });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Add Polly Resilience pipelines and Named HttpClient.
+    /// </summary>
+    public static IServiceCollection AddAppResilience(this IServiceCollection services)
+    {
+        // Add Polly Resilience Pipeline
+        services.AddResiliencePipeline("external-services", pipelineBuilder =>
+        {
+            pipelineBuilder.AddRetry(new Polly.Retry.RetryStrategyOptions
+            {
+                MaxRetryAttempts = 3,
+                Delay = TimeSpan.FromSeconds(2),
+                BackoffType = DelayBackoffType.Exponential,
+                UseJitter = true
+            })
+            .AddCircuitBreaker(new Polly.CircuitBreaker.CircuitBreakerStrategyOptions
+            {
+                FailureRatio = 0.5,
+                SamplingDuration = TimeSpan.FromSeconds(30),
+                MinimumThroughput = 5,
+                BreakDuration = TimeSpan.FromSeconds(15)
+            });
+        });
+
+        // Add Resilient Named HttpClient with Polly pipeline
+        services.AddHttpClient("ResilientClient")
+            .AddResilienceHandler("external-services-pipeline", pipelineBuilder =>
+            {
+                pipelineBuilder.AddRetry(new Polly.Retry.RetryStrategyOptions<HttpResponseMessage>
+                {
+                    MaxRetryAttempts = 3,
+                    Delay = TimeSpan.FromSeconds(2),
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true
+                })
+                .AddCircuitBreaker(new Polly.CircuitBreaker.CircuitBreakerStrategyOptions<HttpResponseMessage>
+                {
+                    FailureRatio = 0.5,
+                    SamplingDuration = TimeSpan.FromSeconds(30),
+                    MinimumThroughput = 5,
+                    BreakDuration = TimeSpan.FromSeconds(15)
+                });
+            });
 
         return services;
     }
