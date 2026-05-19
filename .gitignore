@@ -69,6 +69,9 @@ Thumbs.db
 kind.exe
 kind
 
+# Local AI/Claude harness artifacts
+.claude/
+
 # OS generated files
 .DS_Store
 .DS_Store?

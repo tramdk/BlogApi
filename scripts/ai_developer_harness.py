@@ -637,11 +637,11 @@ class AIDeveloperHarness:
                     # Kiểm tra xem có phải lệnh git an toàn không
                     is_git = cmd.startswith("git ") and any(sub in cmd for sub in ["status", "add", "commit", "diff"])
                     
-                    if cmd not in ["dotnet build", "dotnet test"] and not is_git:
+                    if cmd not in ["dotnet build", "dotnet test", "dotnet restore", "dotnet clean"] and not is_git:
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
-                            details="Harness chỉ cho phép chạy lệnh 'dotnet build', 'dotnet test' hoặc các lệnh git cơ bản (status, add, commit, diff).",
+                            details="Harness chỉ cho phép chạy lệnh 'dotnet build', 'dotnet test', 'dotnet restore', 'dotnet clean' hoặc các lệnh git cơ bản (status, add, commit, diff).",
                             next_actions=["Chỉ sử dụng lệnh hợp lệ."]
                         )
                     else:
