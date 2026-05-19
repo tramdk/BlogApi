@@ -62,7 +62,7 @@ services:
     container_name: flora-core-otel-collector
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
-      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml
+      - ./telemetry/otel-collector-config.yaml:/etc/otelcol/config.yaml
     ports:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
@@ -80,7 +80,7 @@ services:
     image: prom/prometheus:latest
     container_name: flora-core-prometheus
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./telemetry/prometheus.yml:/etc/prometheus/prometheus.yml
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -91,7 +91,7 @@ services:
     image: grafana/grafana:latest
     container_name: flora-core-grafana
     volumes:
-      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./telemetry/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_AUTH_ANONYMOUS_ENABLED=true
