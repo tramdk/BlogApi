@@ -19,10 +19,23 @@ using Microsoft.Extensions.Caching.Hybrid;
 
 namespace FloraCore.Infrastructure;
 
+/// <summary>
+/// Lớp mở rộng chứa các phương thức đăng ký dịch vụ của tầng Infrastructure vào DI Container.
+/// </summary>
 public static class DependencyInjection
 {
+    /// <summary>
+    /// Đăng ký các dịch vụ cốt lõi của tầng Infrastructure bao gồm Database, Identity, Repositories và Services.
+    /// </summary>
+    /// <param name="services">DI container của ứng dụng.</param>
+    /// <param name="configuration">Cấu hình hệ thống.</param>
+    /// <returns>Trả về <see cref="IServiceCollection"/> để tiếp tục chuỗi đăng ký.</returns>
+    /// <exception cref="ArgumentNullException">Ném ra nếu services hoặc configuration bị null.</exception>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
         // Database
         var databaseProvider = configuration["DatabaseProvider"] ?? "SqlServer";
         var connectionString = configuration.GetConnectionString("DefaultConnection");
@@ -90,16 +103,44 @@ public static class DependencyInjection
         return services;
     }
 
+    /// <summary>
+    /// Đăng ký các dịch vụ liên quan đến SignalR phục vụ truyền thông thời gian thực.
+    /// </summary>
+    /// <param name="services">DI container của ứng dụng.</param>
+    /// <returns>Trả về <see cref="IServiceCollection"/> để tiếp tục chuỗi đăng ký.</returns>
+    /// <exception cref="ArgumentNullException">Ném ra nếu services bị null.</exception>
     public static IServiceCollection AddSignalRServices(this IServiceCollection services)
     {
+        ArgumentNullException.ThrowIfNull(services);
+
         services.AddSignalR();
         services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, FloraCore.Infrastructure.Hubs.UserIdProvider>();
         return services;
     }
 
+    /// <summary>
+    /// Đăng ký và cấu hình hệ thống giám sát OpenTelemetry sử dụng mô hình Strongly-typed Configuration.
+    /// </summary>
+    /// <param name="services">DI container của ứng dụng.</param>
+    /// <param name="configuration">Cấu hình hệ thống.</param>
+    /// <returns>Trả về <see cref="IServiceCollection"/> để tiếp tục chuỗi đăng ký.</returns>
+    /// <exception cref="ArgumentNullException">Ném ra nếu services hoặc configuration bị null.</exception>
     public static IServiceCollection AddObservability(this IServiceCollection services, IConfiguration configuration)
     {
-        var otlpEndpoint = configuration["Telemetry:OtlpEndpoint"] ?? "http://localhost:4317";
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // Bắt buộc cấu hình Strongly-typed và thực hiện xác thực Data Annotations khi khởi động
+        services.AddOptions<TelemetryOptions>()
+            .Bind(configuration.GetSection(TelemetryOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // Đọc giá trị cấu hình trực tiếp để thiết lập OpenTelemetry
+        var telemetryOptions = new TelemetryOptions();
+        configuration.GetSection(TelemetryOptions.SectionName).Bind(telemetryOptions);
+
+        var otlpEndpoint = telemetryOptions.OtlpEndpoint;
 
         services.AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddService("FloraCore"))
@@ -109,7 +150,7 @@ public static class DependencyInjection
                     .AddHttpClientInstrumentation()
                     .AddEntityFrameworkCoreInstrumentation();
 
-                if (configuration.GetValue<bool>("Telemetry:ExportToConsole", false))
+                if (telemetryOptions.ExportToConsole)
                 {
                     tracing.AddConsoleExporter();
                 }
@@ -128,7 +169,7 @@ public static class DependencyInjection
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation();
 
-                if (configuration.GetValue<bool>("Telemetry:ExportToConsole", false))
+                if (telemetryOptions.ExportToConsole)
                 {
                     metrics.AddConsoleExporter();
                 }
@@ -145,8 +186,18 @@ public static class DependencyInjection
         return services;
     }
 
+    /// <summary>
+    /// Đăng ký và cấu hình Hangfire phục vụ các tác vụ chạy ngầm định kỳ.
+    /// </summary>
+    /// <param name="services">DI container của ứng dụng.</param>
+    /// <param name="configuration">Cấu hình hệ thống.</param>
+    /// <returns>Trả về <see cref="IServiceCollection"/> để tiếp tục chuỗi đăng ký.</returns>
+    /// <exception cref="ArgumentNullException">Ném ra nếu services hoặc configuration bị null.</exception>
     public static IServiceCollection AddBackgroundTasks(this IServiceCollection services, IConfiguration configuration)
     {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
         var databaseProvider = configuration["DatabaseProvider"] ?? "SqlServer";
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
