@@ -1,0 +1,119 @@
+pipeline:
+  name: FloraCore CI CD Pipeline
+  identifier: FloraCore_CI_CD_Pipeline
+  projectIdentifier: default_project
+  orgIdentifier: default_org
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: github_connector # Connector kết nối tới GitHub của bạn
+        repoName: flora-core
+        build: <+input>
+  stages:
+    # -------------------------------------------------------------
+    # STAGE 1: BUILD & TEST (Sử dụng môi trường Container chạy .NET 9)
+    # -------------------------------------------------------------
+    - stage:
+        name: Build and Test
+        identifier: Build_and_Test
+        type: CI
+        spec:
+          cloneFilesInfo:
+            type: Git
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: k8s_cluster_connector # Connect tới K8s cluster của bạn để tạo runner pod
+              namespace: harness-ci-builds
+          execution:
+            steps:
+              # Bước 1.1: Khôi phục Dependencies và Biên dịch dự án
+              - step:
+                  type: Run
+                  name: Dotnet Restore and Build
+                  identifier: Dotnet_Restore_and_Build
+                  spec:
+                    connectorRef: dockerhub_connector
+                    image: mcr.microsoft.com/dotnet/sdk:9.0 # Docker image chứa .NET 9 SDK
+                    shell: Bash
+                    command: |-
+                      echo "Restoring NuGet packages..."
+                      dotnet restore
+                      
+                      echo "Building the solution in Release mode..."
+                      dotnet build --configuration Release --no-restore
+
+              # Bước 1.2: Chạy bộ 36 bài Integration Tests
+              - step:
+                  type: Run
+                  name: Run Integration Tests
+                  identifier: Run_Integration_Tests
+                  spec:
+                    connectorRef: dockerhub_connector
+                    image: mcr.microsoft.com/dotnet/sdk:9.0
+                    shell: Bash
+                    command: |-
+                      echo "Running Integration Tests..."
+                      # Dự án FloraCore sử dụng SQLite In-memory cho môi trường test nên chạy rất nhanh và không cần DB thật
+                      dotnet test FloraCore.Tests/FloraCore.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=test_results.trx"
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsFailure # Nếu bất kỳ test case nào fail, dừng pipeline lập tức
+
+    # -------------------------------------------------------------
+    # STAGE 2: SECURITY SCANNING (STO - Security Testing Orchestration)
+    # -------------------------------------------------------------
+    - stage:
+        name: Security Scanning
+        identifier: Security_Scanning
+        type: CI
+        spec:
+          cloneFilesInfo:
+            type: Git
+          infrastructure:
+            useFromStage: Build_and_Test
+          execution:
+            steps:
+              # Quét lỗ hổng của các gói NuGet (Snyk/SonarQube) và tìm các rò rỉ Secrets (Gitleaks)
+              - step:
+                  type: Security
+                  name: Code and Dependency Scan
+                  identifier: Code_and_Dependency_Scan
+                  spec:
+                    privacy: public
+                    setting:
+                      type: snyk
+                      config:
+                        scanType: orchestration
+                        severity: critical # Pipeline sẽ fail nếu phát hiện lỗ hổng mức Critical trở lên
+
+    # -------------------------------------------------------------
+    # STAGE 3: BUILD & PUSH DOCKER IMAGE (Đóng gói Container)
+    # -------------------------------------------------------------
+    - stage:
+        name: Build and Package
+        identifier: Build_and_Package
+        type: CI
+        spec:
+          cloneFilesInfo:
+            type: Git
+          infrastructure:
+            useFromStage: Build_and_Test
+          execution:
+            steps:
+              # Build Docker image dựa vào Dockerfile có sẵn ở root và push lên Registry
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build and Push to Registry
+                  identifier: Build_and_Push_to_Registry
+                  spec:
+                    connectorRef: dockerhub_connector
+                    repo: your_dockerhub_username/flora-core # Thay bằng Registry của bạn
+                    tags:
+                      - <+pipeline.sequenceId> # Sử dụng Build ID làm tag của image
+                      - latest
+                    dockerfile: Dockerfile

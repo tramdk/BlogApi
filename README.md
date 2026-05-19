@@ -210,7 +210,21 @@ Targeted MIME types: `application/json`, `text/plain`, `image/svg+xml`
 
 ## 🛡 Resilience & Reliability
 
-### Polly Pipeline: `external-services`
+### Resilient Telemetry & HTTP Communications
+
+FloraCore implements industry-standard resilience policies (Retry, Circuit Breaker) via **Polly v8/v9** integrated directly with **`IHttpClientFactory`**.
+
+#### 1. Resilient HTTP Client (`ResilientClient`)
+Instead of manually instantiating `HttpClient` (which causes socket exhaustion), the project uses a named resilient client registered in `Program.cs`. Services injecting `IHttpClientFactory` receive a client with transparent, pre-configured resilience:
+
+```csharp
+// Resolve from pre-configured factory
+var httpClient = httpClientFactory.CreateClient("ResilientClient");
+var bytes = await httpClient.GetByteArrayAsync(fileUrl); // Resiliency is fully automated!
+```
+
+#### 2. Polly Pipeline: `external-services`
+For non-HTTP operations or wrapping third-party SDK calls (like Cloudinary SDK uploads/destroys), a global pipeline `external-services` is exposed via the `ResiliencePipelineProvider`:
 
 ```
 Request → Retry (3x, exponential + jitter) → Circuit Breaker → Execute
@@ -476,6 +490,20 @@ Response
 ---
 
 ## 👨‍💻 Developer Guide
+
+### AI Developer Harness (Local Agent)
+
+The project includes an **AI Developer Harness** (`scripts/ai_developer_harness.py`) — a local agentic workspace that lets an AI Agent safely write code, run compiler commands, execute test suites, and self-heal on failures. It also features a **GAN-Style Adversarial Evaluator** to automatically enforce architectural and code quality rules.
+
+```bash
+# Run harness locally in interactive mode
+python scripts/ai_developer_harness.py "Your coding request here"
+
+# Run harness with autonomous mode (auto-approve safe commands)
+python scripts/ai_developer_harness.py "Your coding request here" --auto-approve
+```
+
+For more details, see the **[Harness Engineering Guide](./docs/guides/harness_guide.md)**.
 
 ### Adding a New Feature
 
