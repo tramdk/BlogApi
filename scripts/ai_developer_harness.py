@@ -4,6 +4,7 @@ import subprocess
 import re
 import ast
 import json
+import time
 
 # Khắc phục lỗi mã hóa Unicode trên terminal Windows
 if sys.platform.startswith('win'):
@@ -316,7 +317,7 @@ class AIDeveloperHarness:
             return self.get_mock_agent_response(self.current_role)
             
         import time
-        max_retries = 3
+        max_retries = 6
         backoff = 2
         
         for attempt in range(max_retries):
@@ -419,17 +420,21 @@ class AIDeveloperHarness:
                     return response.choices[0].message.content
             except Exception as e:
                 err_msg = str(e)
+                is_rate_limit = any(keyword in err_msg or keyword in err_msg.lower() for keyword in ["429", "resource_exhausted", "quota", "rate limit", "rate_limit"])
+                
                 if attempt < max_retries - 1:
-                    print(f"⚠️ [Harness API Warning]: Lần gọi {attempt + 1} cho {self.provider.upper()} thất bại ({err_msg}). Đang thử lại sau {backoff} giây...")
-                    time.sleep(backoff)
-                    backoff *= 2
+                    sleep_time = 15 * (attempt + 1) if is_rate_limit else backoff
+                    print(f"⚠️ [Harness API Warning]: Lần gọi {attempt + 1} cho {self.provider.upper()} thất bại ({err_msg}). Đang thử lại sau {sleep_time} giây...")
+                    time.sleep(sleep_time)
+                    if not is_rate_limit:
+                        backoff *= 2
                 else:
                     print(f"\n=============================================================")
                     print(f"⚠️ [CẢNH BÁO LỖI KẾT NỐI API {self.provider.upper()}]")
                     print(f"=============================================================")
                     
-                    if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
-                        print(f"👉 Chi tiết: Khóa API đã hết hạn mức sử dụng (Quota Exceeded) hoặc vượt quá giới hạn request.")
+                    if is_rate_limit:
+                        print(f"👉 Chi tiết: API bị giới hạn tốc độ sau {max_retries} lần thử lại với Progressive Backoff.")
                     elif "402" in err_msg or "insufficient_balance" in err_msg.lower():
                         print(f"👉 Chi tiết: Tài khoản API không đủ số dư (Insufficient Balance).")
                     elif "403" in err_msg or "401" in err_msg or "invalid" in err_msg.lower() or "unauthorized" in err_msg.lower():
@@ -815,6 +820,11 @@ class AIDeveloperHarness:
         context_history = initial_context
         
         while self.iteration_count < self.max_iterations:
+            # Thêm độ trễ giữa các lượt để tránh quá tải API (burst requests)
+            if self.iteration_count > 0:
+                import time
+                time.sleep(2)
+            
             # 1. Gọi LLM
             response = self.call_llm(context_history, system_instruction, stop_sequences=["OBSERVATION:", "Observation:", "=== OBSERVATION ==="])
             self.print_agent_response(response)
@@ -1090,7 +1100,7 @@ class AIDeveloperHarness:
             "⚠️ QUY TẮC PHẢN HỒI (REACT FORMAT) - BẮT BUỘC TUÂN THỦ:\n"
             "Mỗi lượt phản hồi của bạn BẮT BUỘC phải chia làm 2 phần rõ ràng theo đúng cấu trúc sau:\n"
             "THOUGHT: <suy nghĩ của bạn về bước tiếp theo, phân tích kết quả quan sát trước đó>\n"
-            "ACTION: <tên_hàm>(<các đối số>)\n\n"
+            "ACTION: <tên_hàm>(<đối_số>)\n\n"
             "Danh sách các ACTION duy nhất bạn được phép sử dụng:\n"
             "1. `read_source(file_path)`: Đọc nội dung của một file nguồn.\n"
             "   Ví dụ: ACTION: read_source(\"Domain/Entities/Post.cs\")\n"
@@ -1127,6 +1137,7 @@ class AIDeveloperHarness:
             "Bạn chỉ được phép ghi hoặc sửa đổi các tệp kiểm thử trong thư mục kiểm thử (ví dụ: FloraCore.Tests hoặc các file có hậu tố Tests.cs).\n"
             "Tuyệt đối KHÔNG ĐƯỢC sửa đổi bất kỳ tệp code production nào (trong Domain, Application, Infrastructure, Controllers).\n"
             "Sau khi viết xong các test cases, hãy chạy `dotnet build` để đảm bảo chúng biên dịch thành công. LƯU Ý: các test cases có thể thất bại khi chạy vì code production chưa được viết.\n"
+            "🚨 QUY TẮC BẮT BUỘC: Trước khi viết test cho bất kỳ class nào, bạn PHẢI dùng `read_source` để đọc mã nguồn production của class đó nhằm kiểm tra chính xác namespace, tên class, chữ ký constructor và các phương thức. TUYỆT ĐỐI KHÔNG được tự phán đoán hoặc bịa đặt namespace/chữ ký.\n"
             "Gọi `finish_task('<báo cáo các file test đã viết>')` khi hoàn thành."
         )
         if self.policy_content:
