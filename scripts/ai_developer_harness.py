@@ -30,7 +30,7 @@ except ImportError:
 # =====================================================================
 
 def run_dotnet_command(command: str) -> tuple[int, str]:
-    """Chạy một lệnh dotnet CLI và trả về exit code cùng console output."""
+    """Chạy một lệnh dotnet CLI hoặc git và trả về exit code cùng console output."""
     try:
         print(f"\n[Harness Executing]: {command}")
         # Chạy lệnh trong thư mục hiện tại của dự án
@@ -40,9 +40,9 @@ def run_dotnet_command(command: str) -> tuple[int, str]:
             capture_output=True,
             encoding='utf-8',
             errors='replace',
-            timeout=120  # Timeout 2 phút tránh treo đúp
+            timeout=300  # Timeout 5 phút tránh treo đúp
         )
-        output = result.stdout + "\n" + result.stderr
+        output = (result.stdout or "") + "\n" + (result.stderr or "")
         return result.returncode, output
     except subprocess.TimeoutExpired:
         return -1, "Lỗi: Lệnh bị Timeout (quá 2 phút)."
@@ -71,10 +71,25 @@ def write_source_file(file_path: str, content: str) -> str:
         return f"Lỗi ghi file: {str(e)}"
 
 def strip_wrapping_quotes(s: str) -> str:
-    """Loại bỏ cặp dấu nháy đơn hoặc nháy kép bao bọc ngoài cùng của một chuỗi."""
+    """Loại bỏ các ký tự bao bọc chuỗi như nháy đơn, nháy kép, triple quotes, hoặc prefix verbatim (@, $, r, f)."""
     s = s.strip()
-    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
-        return s[1:-1]
+    
+    # Loại bỏ prefix của C# hoặc Python nếu có (ví dụ: @", $", r", f")
+    prefix_match = re.match(r'^([@$rfRF]+)?(["\'])', s)
+    if prefix_match:
+        prefix = prefix_match.group(0)  # Ví dụ: @" hoặc "
+        quote_char = prefix_match.group(2)
+        
+        # Kiểm tra triple quotes trước
+        triple_quote = quote_char * 3
+        if s.startswith(prefix_match.group(1) + triple_quote if prefix_match.group(1) else triple_quote) and s.endswith(triple_quote):
+            start_len = (len(prefix_match.group(1)) if prefix_match.group(1) else 0) + 3
+            return s[start_len:-3]
+            
+        if s.endswith(quote_char):
+            start_len = len(prefix)
+            return s[start_len:-1]
+            
     return s
 
 def safe_parse_action_arguments(action_args: str) -> tuple:
@@ -86,10 +101,22 @@ def safe_parse_action_arguments(action_args: str) -> tuple:
         if isinstance(parsed, tuple):
             return parsed
         return (parsed,)
-    except Exception as e:
+    except Exception:
         # Fallback về split theo dấu phẩy đầu tiên nếu ast parse thất bại
         parts = action_args.split(",", 1)
-        return tuple(strip_wrapping_quotes(p) for p in parts)
+        p1 = strip_wrapping_quotes(parts[0])
+        p2 = parts[1].strip() if len(parts) > 1 else ""
+        if p2.endswith(')'):
+            p2 = p2[:-1].strip()
+        p2 = strip_wrapping_quotes(p2)
+        
+        # Decode các ký tự escape nếu dùng phương án fallback
+        try:
+            p2 = p2.encode('utf-8').decode('unicode_escape')
+        except Exception:
+            p2 = p2.replace("\\n", "\n").replace("\\t", "\t").replace('\\"', '"').replace("\\'", "'").replace("\\\\", "\\")
+            
+        return (p1, p2) if len(parts) > 1 else (p1,)
 
 def extract_compiler_errors(output: str) -> list[str]:
     """Trích xuất các lỗi biên dịch C# (CSxxxx) từ console output của dotnet build."""
@@ -134,7 +161,7 @@ def check_csharp_linting() -> str:
             
         print(f"🧹 [Harness Linter]: Đang kiểm tra định dạng (dotnet format) cho {len(csharp_files)} tệp C# thay đổi...")
         # Ghép các tệp cách nhau bằng dấu cách
-        files_str = " ".join(csharp_files)
+        files_str = " ".join(f'"{f}"' for f in csharp_files)
         # Chạy dotnet format với bộ lọc chỉ quét các file thay đổi
         lint_code, lint_out = run_dotnet_command(f"dotnet format --include {files_str} --verify-no-changes")
         
@@ -171,13 +198,13 @@ def format_observation(status: str, summary: str, details: str, next_actions: li
 
 class AIDeveloperHarness:
     def __init__(self, auto_approve: bool = False):
-        # Đọc và dọn dẹp các API Key để tránh lỗi dấu nháy kép từ file .env (ví dụ: KEY="")
+        # Đọc và dọn dẹp các API Key để tránh lỗi dấu nháy kép từ file .env
         gemini_key = (os.getenv("GEMINI_API_KEY") or "").strip("'\" \t")
         openai_key = (os.getenv("OPENAI_API_KEY") or "").strip("'\" \t")
         claude_key = (os.getenv("CLAUDE_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or "").strip("'\" \t")
         deepseek_key = (os.getenv("DEEPSEEK_API_KEY") or "").strip("'\" \t")
         
-        # Xác định Provider dựa trên khóa thực tế hợp lệ (khác rỗng)
+        # Xác định Provider dựa trên khóa thực tế hợp lệ
         if gemini_key:
             self.provider = "gemini"
             self.api_key = gemini_key
@@ -198,6 +225,8 @@ class AIDeveloperHarness:
         self.iteration_count = 0
         self.auto_approve = auto_approve
         self.pass_threshold = float(os.getenv("GAN_PASS_THRESHOLD") or 7.5)
+        self.current_role = "Planner"
+        self.gemini_caches = {}
         
         # Cấu hình lưu trữ tệp tin log trong thư mục chuyên dụng (.claude/evals/)
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -209,11 +238,27 @@ class AIDeveloperHarness:
         # Ghi log dòng chào mừng cho phiên làm việc mới
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write(f"\n\n=============================================================\n")
-            f.write(f"PHIÊN LÀM VIỆC MỚI KHỞI CHẠY\n")
+            f.write(f"PHIÊN LÀM VIỆC MỚI KHỞI CHẠY (MULTI-AGENT SPEC-DRIVEN FLOW)\n")
             f.write(f"=============================================================\n")
         
+        # Tự động nạp chính sách lập trình cục bộ (CODING_POLICY.md hoặc CLAUDE.md)
+        self.policy_content = ""
+        try:
+            policy_files = ["CODING_POLICY.md", "CLAUDE.md"]
+            for p_file in policy_files:
+                p_path = os.path.join(root_dir, p_file)
+                if os.path.exists(p_path):
+                    with open(p_path, "r", encoding="utf-8") as pf:
+                        self.policy_content = pf.read()
+                    print(f"📖 [Harness Control]: Đang nạp chính sách lập trình từ '{p_file}'...")
+                    break
+        except Exception as e:
+            print(f"⚠️ [Harness Control]: Lỗi khi quét/nạp chính sách lập trình cục bộ: {e}")
+
+        # Lược bỏ quét global skills để tối ưu chi phí token. Mọi quy tắc đã được hợp nhất vào CODING_POLICY.md.
+
         if self.provider == "mock" or not self.api_key:
-            print("[CẢNH BÁO]: Không tìm thấy khóa API của GEMINI, OPENAI, CLAUDE hoặc DEEPSEEK trong môi trường.")
+            print("[CẢNH BÁO]: Không tìm thấy khóa API của GEMINI, OPENAI, CLAUDE hoặc DEEPSEEK.")
             print("Harness sẽ chạy ở chế độ giả lập (Mock LLM) để minh họa quy trình.")
             self.mock_mode = True
         else:
@@ -225,13 +270,15 @@ class AIDeveloperHarness:
         try:
             if self.provider == "gemini":
                 from google import genai
-                self.client = genai.Client(api_key=self.api_key)
-                # Đọc model từ env, mặc định là gemini-1.5-flash để đảm bảo tương thích tốt nhất
+                from google.genai import types
+                self.client = genai.Client(
+                    api_key=self.api_key,
+                    http_options=types.HttpOptions(timeout=600_000) # Tăng timeout lên 10 phút
+                )
                 self.model_name = os.getenv("GEMINI_MODEL") or "gemini-1.5-flash"
             elif self.provider == "openai":
                 from openai import OpenAI
                 self.client = OpenAI(api_key=self.api_key)
-                # Đọc model từ env, mặc định là gpt-4o
                 self.model_name = os.getenv("OPENAI_MODEL") or "gpt-4o"
             elif self.provider == "claude":
                 import anthropic
@@ -239,7 +286,6 @@ class AIDeveloperHarness:
                 self.model_name = os.getenv("CLAUDE_MODEL") or os.getenv("ANTHROPIC_MODEL") or "claude-3-5-sonnet-latest"
             elif self.provider == "deepseek":
                 from openai import OpenAI
-                # DeepSeek API hoàn toàn tương thích với OpenAI SDK, chỉ cần trỏ custom base_url
                 self.client = OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com")
                 self.model_name = os.getenv("DEEPSEEK_MODEL") or "deepseek-chat"
         except ImportError as e:
@@ -254,8 +300,9 @@ class AIDeveloperHarness:
             sys.exit(1)
 
     def ask_approval(self, message: str, force_ask: bool = False) -> bool:
-        """Hỏi ý kiến người dùng trước khi thực thi hành động nhạy cảm."""
-        if self.auto_approve and not force_ask:
+        """Hỏi ý kiến người dùng trước khi thực thi hành động nhạy cảm hoặc phê duyệt chốt chặn."""
+        if self.auto_approve:
+            print(f"\n🛡️  [Harness HITL - AUTO APPROVED]: {message}")
             return True
         try:
             choice = input(f"\n🛡️  [Harness HITL]: {message}\n👉 Đồng ý thực thi? (y/n) [Mặc định: y]: ").strip().lower()
@@ -263,121 +310,243 @@ class AIDeveloperHarness:
         except Exception:
             return False
 
-    def call_llm(self, prompt: str, system_instruction: str) -> str:
+    def call_llm(self, prompt: str, system_instruction: str, stop_sequences: list[str] = None) -> str:
         """Gọi LLM để lấy phân tích và hành động tiếp theo."""
         if self.mock_mode:
-            return self.get_mock_agent_response()
+            return self.get_mock_agent_response(self.current_role)
             
-        try:
-            if self.provider == "gemini":
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config={"system_instruction": system_instruction, "temperature": 0.0}
-                )
-                return response.text
-            elif self.provider == "claude":
-                response = self.client.messages.create(
-                    model=self.model_name,
-                    max_tokens=4000,
-                    temperature=0.0,
-                    system=system_instruction,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                return response.content[0].text
-            else:
-                # Dành cho cả 'openai' và 'deepseek' (vì deepseek dùng chung openai client)
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": system_instruction},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.0
-                )
-                return response.choices[0].message.content
-        except Exception as e:
-            err_msg = str(e)
-            print(f"\n=============================================================")
-            print(f"⚠️ [CẢNH BÁO LỖI KẾT NỐI API {self.provider.upper()}]")
-            print(f"=============================================================")
-            
-            # 1. Lỗi Hết hạn mức / Rate Limit / Hết tiền (429 Resource Exhausted / Insufficient Quota)
-            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
-                print(f"👉 Chi tiết: Khóa API đã hết hạn mức sử dụng (Quota Exceeded) hoặc vượt quá giới hạn request cho phép (Rate Limit).")
-                print(f"💡 Hướng giải quyết:")
+        import time
+        max_retries = 3
+        backoff = 2
+        
+        for attempt in range(max_retries):
+            try:
                 if self.provider == "gemini":
-                    print(f"   - Nếu bạn dùng tài khoản Free Tier, vui lòng chờ khoảng 1 phút rồi chạy lại.")
-                    print(f"   - Truy cập https://aistudio.google.com/ để kiểm tra hạn mức sử dụng.")
-                elif self.provider == "openai":
-                    print(f"   - Tài khoản OpenAI của bạn đã hết hạn mức miễn phí (Credit Expired) hoặc hết tiền.")
-                    print(f"   - Vui lòng truy cập https://platform.openai.com/settings/organization/billing để nạp tiền (Top up) hoặc cập nhật phương thức thanh toán.")
+                    from google.genai import types
+                    
+                    cache_key = hash(system_instruction)
+                    cache_name = self.gemini_caches.get(cache_key)
+                    
+                    if not cache_name:
+                        try:
+                            print(f"⚡ [Harness Gemini Cache]: Đang tạo Context Cache cho vai trò {self.current_role}...")
+                            model_id = self.model_name
+                            if not model_id.startswith("models/"):
+                                model_id = f"models/{model_id}"
+                                
+                            cache = self.client.caches.create(
+                                model=model_id,
+                                config=types.CreateCachedContentConfig(
+                                    contents=["Hệ thống đã nạp chính sách lập trình và hướng dẫn vai trò."],
+                                    system_instruction=system_instruction,
+                                    ttl="3600s" # Tăng TTL lên 1 giờ để giữ cache lâu hơn cho các task dài
+                                )
+                            )
+                            cache_name = cache.name
+                            self.gemini_caches[cache_key] = cache_name
+                            print(f"✅ [Harness Gemini Cache]: Đã kích hoạt Cache thành công ({cache_name})")
+                        except Exception as e:
+                            print(f"⚠️ [Harness Gemini Cache Warning]: Không tạo được Cache ({e}). Sẽ fallback về chế độ bình thường.")
+                            cache_name = None
+                    
+                    model_id = self.model_name
+                    if not model_id.startswith("models/"):
+                        model_id = f"models/{model_id}"
+    
+                    if cache_name:
+                        response = self.client.models.generate_content(
+                            model=model_id,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                cached_content=cache_name,
+                                temperature=0.0,
+                                stop_sequences=stop_sequences
+                            )
+                        )
+                    else:
+                        response = self.client.models.generate_content(
+                            model=model_id,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_instruction,
+                                temperature=0.0,
+                                stop_sequences=stop_sequences
+                            )
+                        )
+                    
+                    usage = getattr(response, 'usage_metadata', None)
+                    if usage:
+                        prompt_tokens = getattr(usage, 'prompt_token_count', 0)
+                        completion_tokens = getattr(usage, 'candidates_token_count', 0)
+                        cached_tokens = getattr(usage, 'cached_content_token_count', 0)
+                        total_tokens = getattr(usage, 'total_token_count', 0)
+                        log_msg = (
+                            f"\n📊 [GEMINI API USAGE]:\n"
+                            f"   ├─ 📥 Input Tokens: {prompt_tokens} ({cached_tokens} cached)\n"
+                            f"   ├─ 📤 Output Tokens: {completion_tokens}\n"
+                            f"   └─ 🧮 Total Tokens: {total_tokens}\n"
+                        )
+                        print(log_msg)
+                        with open(self.log_file, "a", encoding="utf-8") as f:
+                            f.write(log_msg)
+                            
+                    return response.text
+                elif self.provider == "claude":
+                    kwargs = {
+                        "model": self.model_name,
+                        "max_tokens": 4000,
+                        "temperature": 0.0,
+                        "system": system_instruction,
+                        "messages": [{"role": "user", "content": prompt}]
+                    }
+                    if stop_sequences:
+                        kwargs["stop_sequences"] = stop_sequences
+                    response = self.client.messages.create(**kwargs)
+                    return response.content[0].text
                 else:
-                    print(f"   - Vui lòng kiểm tra lại hạn mức và thông tin thanh toán trên trang quản trị của nhà cung cấp.")
-                
-            # 2. Lỗi Hết tiền / Không đủ số dư (402 Insufficient Balance)
-            elif "402" in err_msg or "insufficient_balance" in err_msg.lower() or "insufficient balance" in err_msg.lower():
-                print(f"👉 Chi tiết: Tài khoản API {self.provider.upper()} của bạn không đủ số dư (Insufficient Balance - Lỗi 402).")
-                print(f"💡 Hướng giải quyết:")
-                if self.provider == "deepseek":
-                    print(f"   - Vui lòng truy cập https://platform.deepseek.com/ để nạp tiền (Top up) vào tài khoản (DeepSeek yêu cầu nạp trước tối thiểu 2 USD).")
+                    # OpenAI và DeepSeek
+                    kwargs = {
+                        "model": self.model_name,
+                        "messages": [
+                            {"role": "system", "content": system_instruction},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.0
+                    }
+                    if stop_sequences:
+                        kwargs["stop"] = stop_sequences
+                    response = self.client.chat.completions.create(**kwargs)
+                    return response.choices[0].message.content
+            except Exception as e:
+                err_msg = str(e)
+                if attempt < max_retries - 1:
+                    print(f"⚠️ [Harness API Warning]: Lần gọi {attempt + 1} cho {self.provider.upper()} thất bại ({err_msg}). Đang thử lại sau {backoff} giây...")
+                    time.sleep(backoff)
+                    backoff *= 2
                 else:
-                    print(f"   - Vui lòng truy cập trang quản trị tài khoản để kiểm tra thẻ tín dụng hoặc nạp thêm tiền.")
-                
-            # 3. Lỗi Sai Khóa API / Không hợp lệ (403 Forbidden / 401 Unauthorized / Invalid Key)
-            elif "403" in err_msg or "401" in err_msg or "invalid" in err_msg.lower() or "unauthorized" in err_msg.lower():
-                print(f"👉 Chi tiết: Khóa API '{self.provider.upper()}_API_KEY' trong file `.env` không hợp lệ hoặc đã hết hạn.")
-                print(f"💡 Hướng giải quyết:")
-                print(f"   - Mở file '.env' của bạn và kiểm tra lại chuỗi API Key.")
-                print(f"   - Tạo lại khóa mới tại Google AI Studio hoặc OpenAI Platform.")
-                
-            # 3. Lỗi Không tìm thấy Model (404 Not Found)
-            elif "404" in err_msg or "not found" in err_msg.lower():
-                print(f"👉 Chi tiết: Mô hình '{self.model_name}' không khả dụng hoặc không được hỗ trợ bởi tài khoản của bạn.")
-                print(f"💡 Hướng giải quyết:")
-                print(f"   - Mở file '.env' và cấu hình lại dòng: GEMINI_MODEL=gemini-1.5-flash")
-                print(f"   - Hoặc kiểm tra danh sách các model khả dụng của bạn.")
-                
-            # 4. Các lỗi kết nối mạng hoặc lỗi khác
-            else:
-                print(f"👉 Chi tiết lỗi: {err_msg}")
-                print(f"💡 Hướng giải quyết: Kiểm tra kết nối mạng của bạn hoặc cấu hình API proxy nếu cần thiết.")
-                
-            print(f"\n🤖 [Hệ thống]: Tự động chuyển đổi sang chế độ giả lập (Mock Mode) để tiếp tục quy trình...")
-            print(f"=============================================================\n")
-            
-            self.mock_mode = True
-            return self.get_mock_agent_response()
+                    print(f"\n=============================================================")
+                    print(f"⚠️ [CẢNH BÁO LỖI KẾT NỐI API {self.provider.upper()}]")
+                    print(f"=============================================================")
+                    
+                    if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
+                        print(f"👉 Chi tiết: Khóa API đã hết hạn mức sử dụng (Quota Exceeded) hoặc vượt quá giới hạn request.")
+                    elif "402" in err_msg or "insufficient_balance" in err_msg.lower():
+                        print(f"👉 Chi tiết: Tài khoản API không đủ số dư (Insufficient Balance).")
+                    elif "403" in err_msg or "401" in err_msg or "invalid" in err_msg.lower() or "unauthorized" in err_msg.lower():
+                        print(f"👉 Chi tiết: Khóa API '{self.provider.upper()}_API_KEY' không hợp lệ.")
+                    else:
+                        print(f"👉 Chi tiết lỗi: {err_msg}")
+                        
+                    print(f"\n🤖 [Hệ thống]: Tự động chuyển đổi sang chế độ giả lập (Mock Mode) để tiếp tục quy trình...")
+                    print(f"=============================================================\n")
+                    self.mock_mode = True
+                    return self.get_mock_agent_response(self.current_role)
 
-    def get_mock_agent_response(self) -> str:
-        """Trả về phản hồi giả lập của Agent nếu không có API Key."""
+    def get_mock_agent_response(self, role: str) -> str:
+        """Trả về phản hồi giả lập của Agent dựa trên vai trò hoạt động."""
         self.iteration_count += 1
-        if self.iteration_count == 1:
-            return (
-                "THOUGHT: Tôi cần kiểm tra cấu trúc dự án và chạy thử nghiệm build hiện tại trước.\n"
-                "ACTION: execute_command('dotnet build')\n"
+        
+        if role == "Planner":
+            if self.iteration_count == 1:
+                return (
+                    "THOUGHT: Tôi cần khảo sát thư mục dự án và đọc một số file thực thể mẫu trước khi lên kế hoạch.\n"
+                    "ACTION: read_source('Domain/Entities/Post.cs')\n"
+                )
+            else:
+                plan_md = (
+                    "### AI EXECUTION PLAN: TÍCH HỢP THỰC THỂ POSTCATEGORY\n\n"
+                    "1. **Phân tích Kiến trúc**:\n"
+                    "   - Lớp Domain: Tạo thực thể `PostCategory.cs` kế thừa từ `BaseEntity`.\n"
+                    "   - Lớp Application: Tạo Command/Query để thêm mới và truy vấn danh mục bài viết thông qua MediatR.\n"
+                    "   - Lớp Infrastructure: Đăng ký cấu hình EF Core cho thực thể mới.\n"
+                    "2. **Kịch bản kiểm thử (Test Cases)**:\n"
+                    "   - Viết Integration Test kiểm chứng việc tạo mới PostCategory thành công với dữ liệu hợp lệ.\n"
+                    "   - Viết Unit Test kiểm tra Validation: tên danh mục không được phép trống."
+                )
+                return f"THOUGHT: Tôi đã lập xong kế hoạch chi tiết. Tôi sẽ kết thúc tác vụ lập kế hoạch.\nACTION: finish_task('{plan_md}')\n"
+                
+        elif role == "TestWriter":
+            if self.iteration_count == 1:
+                test_code = (
+                    "using Xunit;\nusing FluentAssertions;\n\nnamespace FloraCore.Tests.IntegrationTests;\n\n"
+                    "public class PostCategoryTests {\n"
+                    "    [Fact]\n"
+                    "    public void CreatePostCategory_WithValidData_ShouldSucceed() {\n"
+                    "        var category = new Domain.Entities.PostCategory { Id = Guid.NewGuid(), Name = \"Technology\" };\n"
+                    "        category.Name.Should().Be(\"Technology\");\n"
+                    "    }\n"
+                    "}"
+                )
+                test_code_escaped = test_code.replace("\"", "\\\"").replace("\n", "\\n")
+                return (
+                    "THOUGHT: Tôi sẽ viết mã nguồn unit test trước để đảm bảo tính đúng đắn của spec.\n"
+                    f"ACTION: write_source('FloraCore.Tests/IntegrationTests/PostCategoryTests.cs', \"{test_code_escaped}\")\n"
+                )
+            else:
+                return (
+                    "THOUGHT: Tôi đã viết xong các file test cần thiết. Giờ tôi sẽ kết thúc pha viết test.\n"
+                    "ACTION: finish_task('Đã viết thành công integration tests cho PostCategory.')\n"
+                )
+                
+        elif role == "Developer":
+            if self.iteration_count == 1:
+                entity_code = (
+                    "namespace Domain.Entities;\n\npublic class PostCategory {\n"
+                    "    public Guid Id { get; set; }\n"
+                    "    public string Name { get; set; } = string.Empty;\n"
+                    "}"
+                ).replace("\"", "\\\"").replace("\n", "\\n")
+                return (
+                    "THOUGHT: Tôi sẽ viết code thực thể PostCategory trong Domain Layer trước.\n"
+                    f"ACTION: write_source('Domain/Entities/PostCategory.cs', \"{entity_code}\")\n"
+                )
+            elif self.iteration_count == 2:
+                return (
+                    "THOUGHT: Tôi sẽ chạy build dự án để kiểm tra lỗi cú pháp.\n"
+                    "ACTION: execute_command('dotnet build')\n"
+                )
+            elif self.iteration_count == 3:
+                return (
+                    "THOUGHT: Tôi sẽ chạy dotnet test để kiểm chứng các bài kiểm thử đã pass chưa.\n"
+                    "ACTION: execute_command('dotnet test')\n"
+                )
+            else:
+                return (
+                    "THOUGHT: Các bài test đã pass thành công! Tôi sẽ gọi finish_task để gửi cho Evaluator chấm điểm.\n"
+                    "ACTION: finish_task('Đã hiện thực hóa PostCategory.cs và vượt qua tất cả các bài kiểm thử.')\n"
+                )
+        return "THOUGHT: Kết thúc.\nACTION: finish_task('Done')\n"
+
+    def execute_mock_action(self, action_name: str, parsed_args: tuple) -> str:
+        """Thực thi action giả lập để trả về Observation trong Mock Mode."""
+        if action_name == "execute_command":
+            cmd = parsed_args[0] if len(parsed_args) > 0 else ""
+            return format_observation(
+                status="SUCCESS",
+                summary=f"(MOCK) Chạy lệnh '{cmd}' thành công.",
+                details="Mock output: Lệnh chạy thành công."
             )
-        elif self.iteration_count == 2:
-            return (
-                "THOUGHT: Dự án build thành công. Bây giờ tôi sẽ tạo một Domain Entity mới có tên là 'PostCategory.cs'.\n"
-                "ACTION: write_source('Domain/Entities/PostCategory.cs', "
-                "'namespace Domain.Entities;\\n\\npublic class PostCategory {\\n    public Guid Id { get; set; }\\n    public string Name { get; set; } = string.Empty;\\n}')\n"
+        elif action_name == "read_source":
+            filepath = parsed_args[0] if len(parsed_args) > 0 else ""
+            return format_observation(
+                status="SUCCESS",
+                summary=f"(MOCK) Đọc file '{filepath}' thành công.",
+                details="Nội dung file giả lập.",
+                artifacts=[filepath]
             )
-        elif self.iteration_count == 3:
-            return (
-                "THOUGHT: Đã ghi Domain Entity. Giờ tôi cần chạy build lại xem có bị lỗi cú pháp không.\n"
-                "ACTION: execute_command('dotnet build')\n"
+        elif action_name == "write_source":
+            filepath = parsed_args[0] if len(parsed_args) > 0 else ""
+            return format_observation(
+                status="SUCCESS",
+                summary=f"(MOCK) Ghi file '{filepath}' thành công.",
+                details="Ghi file thành công lên hệ thống giả lập.",
+                artifacts=[filepath]
             )
-        elif self.iteration_count == 4:
-            return (
-                "THOUGHT: Build thành công! Tôi sẽ chạy thử nghiệm bộ integration tests có sẵn để đảm bảo không làm gãy hệ thống.\n"
-                "ACTION: execute_command('dotnet test')\n"
-            )
-        else:
-            return (
-                "THOUGHT: Tất cả các bài test đã pass thành công! Công việc hoàn thành tốt đẹp.\n"
-                "ACTION: finish_task('Đã thêm thành công thực thể PostCategory và xác thực dự án chạy ổn định.')\n"
-            )
+        return format_observation(
+            status="ERROR",
+            summary="Action không hợp lệ.",
+            details="Mock mode không nhận biết action này."
+        )
 
     def run_gan_evaluation(self, task: str) -> tuple[float, str]:
         """Thực thi vòng lặp Đánh giá Đối nghịch (GAN-Style Evaluator) đối với mã nguồn thay đổi."""
@@ -387,7 +556,6 @@ class AIDeveloperHarness:
         print("🧪 [Harness Evaluator]: Chạy kiểm thử tự động phục vụ thang điểm Functionality...")
         test_code, test_out = run_dotnet_command("dotnet test")
         
-        # Đếm số lượng test và trích xuất lỗi biên dịch/lỗi kiểm thử
         total_tests = 0
         passed_tests = 0
         failed_tests = 0
@@ -401,13 +569,11 @@ class AIDeveloperHarness:
         if test_failures:
             error_summary += "\n⚠️ CÁC BÀI KIỂM THỬ BỊ THẤT BẠI:\n" + "\n".join(test_failures) + "\n"
             
-        # Chạy kiểm tra định dạng code linter
         lint_violations = check_csharp_linting()
         if lint_violations:
             error_summary += lint_violations
             
         if "Passed!" in test_out or "Passed" in test_out:
-            # Ví dụ: Passed!  - Failed:     0, Passed:    36, Skipped:     0, Total:    36
             match = re.search(r"Failed:\s*(\d+),\s*Passed:\s*(\d+)", test_out)
             if match:
                 failed_tests = int(match.group(1))
@@ -417,7 +583,7 @@ class AIDeveloperHarness:
                 passed_tests = 36
                 total_tests = 36
         elif test_code != 0 or compiler_errors:
-            failed_tests = 1  # Có lỗi xảy ra hoặc lỗi biên dịch
+            failed_tests = 1
             total_tests = 36
             
         func_score = 0.0
@@ -427,12 +593,11 @@ class AIDeveloperHarness:
             else:
                 func_score = 10.0
         else:
-            func_score = 0.0 # Thất bại hoàn toàn do lỗi compile hoặc lỗi test
+            func_score = 0.0
             
         # 2. Lấy Git Diff
         git_diff = ""
         try:
-            # uncommitted changes
             result = subprocess.run("git diff HEAD", shell=True, capture_output=True, encoding='utf-8', errors='replace')
             git_diff = result.stdout or ""
         except Exception:
@@ -440,13 +605,12 @@ class AIDeveloperHarness:
             
         if not git_diff or not git_diff.strip():
             try:
-                # Nếu không có thay đổi uncommitted, lấy diff của commit cuối cùng
                 result = subprocess.run("git diff HEAD~1", shell=True, capture_output=True, encoding='utf-8', errors='replace')
                 git_diff = result.stdout or ""
             except Exception:
                 git_diff = ""
                 
-        # 3. Tạo Prompt cho Evaluator với các nguyên tắc cực kỳ nghiêm ngặt
+        # 3. Tạo Prompt cho Evaluator
         evaluator_system = (
             "Bạn là một Adversarial Evaluator (Nhà đánh giá đối nghịch) cực kỳ nghiêm khắc và có chuyên môn cao về .NET 9.\n"
             "Nhiệm vụ của bạn là đánh giá những thay đổi code của Generator Agent dựa trên git diff và kết quả test.\n"
@@ -471,6 +635,8 @@ class AIDeveloperHarness:
             "}\n"
             "```"
         )
+        if self.policy_content:
+            evaluator_system += f"\n\n--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
         
         eval_prompt = (
             f"Yêu cầu nhiệm vụ: {task}\n\n"
@@ -486,12 +652,11 @@ class AIDeveloperHarness:
         
         response = ""
         if self.mock_mode:
-            # Phản hồi giả lập
             response = (
                 "### BÁO CÁO PHÂN TÍCH CỦA ADVERSARIAL EVALUATOR (GIẢ LẬP)\n\n"
                 "1. **Design Quality (8.5/10)**: Mã nguồn tuân thủ Clean Architecture rất tốt. Các thực thể được tạo đúng Domain lớp.\n"
-                "2. **Originality & Best Practices (8.0/10)**: Sử dụng Primary Constructor rất thanh thoát và File-Scoped namespace đẹp.\n"
-                "3. **Craft & Polish (8.0/10)**: Đã bổ sung XML comments đầy đủ cho các public properties.\n"
+                "2. **Originality & Best Practices (8.0/10)**: Sử dụng Primary Constructor và File-Scoped namespace đẹp.\n"
+                "3. **Craft & Polish (8.0/10)**: XML comments đầy đủ cho các public properties.\n"
                 "4. **Functionality (10.0/10)**: Bộ tests chạy thành công 100%.\n\n"
                 "**Tổng kết**: Code đạt chất lượng Senior C# rất tốt, sạch sẽ và sẵn sàng tích hợp.\n\n"
                 "```json\n"
@@ -519,7 +684,6 @@ class AIDeveloperHarness:
                 score_data = json.loads(json_match.group(1))
                 weighted_score = float(score_data.get("weighted_score", 0.0))
             else:
-                # Fallback nếu không có block json
                 matches = re.findall(r'"weighted_score":\s*([\d.]+)', response)
                 if matches:
                     weighted_score = float(matches[-1])
@@ -529,130 +693,166 @@ class AIDeveloperHarness:
             
         return weighted_score, response
 
-    def execute_react_loop(self, task_description: str):
-        """Thực thi vòng lặp Suy nghĩ -> Hành động -> Quan sát cho Agent."""
+    def selective_rollback(self) -> str:
+        """Khôi phục có chọn lọc: chỉ rollback production code, giữ nguyên test cases và docs."""
+        try:
+            result = subprocess.run("git status --porcelain", shell=True, capture_output=True, encoding='utf-8')
+            if result.returncode != 0:
+                return "Không thể lấy trạng thái git."
+                
+            rolled_back_files = []
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split(maxsplit=1)
+                if len(parts) < 2:
+                    continue
+                status, filepath = parts[0], parts[1].strip()
+                if filepath.startswith('"') and filepath.endswith('"'):
+                    filepath = filepath[1:-1]
+                    
+                normalized_path = filepath.lower().replace("\\", "/")
+                # Bỏ qua tệp test, docs, và plans
+                is_test_or_doc = (
+                    "tests" in normalized_path or 
+                    "test.cs" in normalized_path or 
+                    "docs/" in normalized_path or 
+                    "execution_plan.md" in normalized_path or
+                    "evaluation_report.md" in normalized_path or
+                    "harness_run.log" in normalized_path
+                )
+                
+                if not is_test_or_doc:
+                    if status == "??" or status == "A":
+                        if os.path.exists(filepath):
+                            if os.path.isdir(filepath):
+                                import shutil
+                                shutil.rmtree(filepath)
+                            else:
+                                os.remove(filepath)
+                        rolled_back_files.append(f"Xóa tệp untracked: {filepath}")
+                    else:
+                        subprocess.run(f"git checkout -- \"{filepath}\"", shell=True, capture_output=True)
+                        rolled_back_files.append(f"Khôi phục tệp modified: {filepath}")
+                        
+            if rolled_back_files:
+                return "Đã khôi phục các tệp tin production:\n" + "\n".join(f"  - {f}" for f in rolled_back_files)
+            return "Không phát hiện tệp tin production nào bị thay đổi cần khôi phục."
+        except Exception as e:
+            return f"Lỗi trong quá trình selective rollback: {str(e)}"
+
+    def print_agent_response(self, response: str):
+        """Hiển thị phản hồi của Agent một cách trực quan, sạch sẽ và có cấu trúc trên terminal."""
+        thought_match = re.search(r"\bTHOUGHT\s*:\s*(.*?)(?=\bACTION\s*:|$)", response, re.DOTALL | re.IGNORECASE)
+        action_match = re.search(r"\bACTION\s*:\s*(.*)", response, re.DOTALL | re.IGNORECASE)
+        
+        # 1. Hiển thị THOUGHT nếu có
+        if thought_match:
+            thought = thought_match.group(1).strip()
+            print(f"\n🧠 [THOUGHT]: {thought}")
+            
+        # 2. Hiển thị ACTION nếu có
+        if action_match:
+            action_text = action_match.group(1).strip()
+            func_match = re.search(r"\b(execute_command|read_source|write_source|finish_task|run_command|read_file|write_file|done)\((.*)\)", action_text, re.DOTALL)
+            if func_match:
+                func_name = func_match.group(1).strip()
+                func_args = func_match.group(2).strip()
+                
+                display_name = {
+                    "run_command": "execute_command",
+                    "read_file": "read_source",
+                    "write_file": "write_source",
+                    "done": "finish_task"
+                }.get(func_name, func_name)
+                
+                print(f"🎬 [ACTION]: 🛠️  {display_name}")
+                
+                parsed_args = None
+                try:
+                    parsed_args = ast.literal_eval(f"({func_args})")
+                    if parsed_args is not None and not isinstance(parsed_args, tuple):
+                        parsed_args = (parsed_args,)
+                except Exception:
+                    pass
+                if parsed_args is None:
+                    parsed_args = safe_parse_action_arguments(func_args)
+                
+                if display_name == "write_source" and len(parsed_args) >= 2:
+                    filepath = parsed_args[0]
+                    print(f"   ├─ 📂 Đường dẫn: {filepath}")
+                    print(f"   └─ 📝 Nội dung: [Mã nguồn được ghi - Xem chi tiết tại Preview]")
+                elif display_name == "read_source" and len(parsed_args) >= 1:
+                    filepath = parsed_args[0]
+                    print(f"   └─ 📂 Đường dẫn: {filepath}")
+                elif display_name == "execute_command" and len(parsed_args) >= 1:
+                    cmd = parsed_args[0]
+                    print(f"   └─ 💻 Lệnh chạy: '{cmd}'")
+                elif display_name == "finish_task" and len(parsed_args) >= 1:
+                    summary = parsed_args[0]
+                    summary_clean = summary.replace("\\n", "\n").replace("\n", "\n      ")
+                    print(f"   └─ 🏁 Báo cáo kết quả:\n      {summary_clean}")
+                else:
+                    print(f"   └─ ⚙️ Tham số: {parsed_args}")
+            else:
+                print(f"🎬 [ACTION]: {action_text[:300]}...")
+                
+        # 3. Fallback nếu không khớp cả THOUGHT lẫn ACTION
+        if not thought_match and not action_match:
+            print(f"\n💬 [AGENT]:\n{response[:500]}")
+            if len(response) > 500:
+                print("... [TRUNCATED] ...")
+
+    def run_agent_loop(self, role: str, system_instruction: str, initial_context: str, on_finish_callback) -> str:
+        """Thực thi vòng lặp ReAct (Suy nghĩ -> Hành động -> Quan sát) cho một Agent cụ thể."""
         print(f"\n=============================================================")
-        print(f"🚀 BẮT ĐẦU CHẠY AI DEVELOPER HARNESS CHO TÁC VỤ:")
-        print(f"   👉 '{task_description}'")
+        print(f"🤖 KÍCH HOẠT AGENT: [{role.upper()}]")
         print(f"=============================================================")
         
-        # Đọc chính sách lập trình cục bộ của dự án (CODING_POLICY.md hoặc CLAUDE.md)
-        policy_content = ""
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        root_dir = os.path.dirname(script_dir)
-        policy_files = ["CODING_POLICY.md", "CLAUDE.md"]
-        for p_file in policy_files:
-            p_path = os.path.join(root_dir, p_file)
-            if os.path.exists(p_path):
-                try:
-                    with open(p_path, "r", encoding="utf-8") as f:
-                        policy_content = f.read()
-                    print(f"📖 [Harness Control]: Đang nạp chính sách lập trình từ '{p_file}'...")
-                    break
-                except Exception as e:
-                    print(f"⚠️ [Harness Control]: Lỗi đọc file {p_file}: {e}")
-
-        system_instruction = (
-            "Bạn là một Kỹ sư .NET 9 Senior, làm việc trên dự án FloraCore (Clean Architecture + CQRS + MediatR + xUnit).\n"
-            "Nhiệm vụ của bạn là giải quyết yêu cầu của người dùng bằng cách đọc/viết code và chạy kiểm thử tự động.\n\n"
-        )
-
-        if policy_content:
-            system_instruction += (
-                "--- CHÍNH SÁCH LẬP TRÌNH CỤC BỘ BẮT BUỘC (CODING_POLICY.md) ---\n"
-                "Bạn BẮT BUỘC phải tuyệt đối tuân thủ chính sách lập trình của dự án dưới đây trong mọi thay đổi mã nguồn:\n"
-                f"{policy_content}\n\n"
-            )
-        else:
-            system_instruction += (
-                "--- BẮT BUỘC TUÂN THỦ CHẶT CHẼ CODING POLICY CỦA DỰ ÁN ---\n"
-                "1. KIẾN TRÚC SẠCH (Clean Architecture):\n"
-                "   - Domain Layer: Lõi của dự án, KHÔNG phụ thuộc vào thư viện ngoài. Chứa Entities.\n"
-                "   - Application Layer: Chứa CQRS Commands/Queries, Handlers (MediatR), DTOs, Interfaces và Validators.\n"
-                "   - Infrastructure Layer: Chứa AppDbContext, Repository implementations, migrations và tích hợp DB.\n"
-                "   - Web/API Layer: Chỉ chứa Controllers rất mỏng (thin controllers), ủy quyền xử lý hoàn toàn cho Application thông qua MediatR.\n"
-                "   - Hướng phụ thuộc: Domain <- Application <- Infrastructure <- Controllers. Tuyệt đối không đảo ngược chiều.\n"
-                "2. MODERN C# & .NET 9:\n"
-                "   - Khuyến khích dùng 'record' thay cho class đối với DTOs, Commands và Queries (bất biến - immutable).\n"
-                "   - Sử dụng File-scoped namespaces thay cho block namespaces để giảm thụt lề.\n"
-                "   - Bật và xử lý triệt để Nullable Reference Types.\n"
-                "3. LẬP TRÌNH BẤT ĐỒNG BỘ (Asynchronous):\n"
-                "   - Luôn dùng 'async/await' cho các tác vụ I/O (Database, Network, File).\n"
-                "   - Các hàm bất đồng bộ bắt buộc phải có hậu tố 'Async' (ví dụ: GetProductByIdAsync).\n"
-                "   - TUYỆT ĐỐI KHÔNG dùng '.Result' hoặc '.Wait()' để tránh gây Deadlock. Hãy truyền CancellationToken nếu có thể.\n"
-                "4. THAY ĐỔI PHẪU THUẬT (Surgical Changes):\n"
-                "   - Chỉ sửa đổi chính xác những dòng code cần thiết để giải quyết yêu cầu.\n"
-                "   - Không tự ý tái cấu trúc (refactor) hoặc chỉnh sửa định dạng/comment ở các phần code xung quanh đang chạy ổn định.\n"
-                "   - Loại bỏ các thư viện imports/using và biến không dùng đến phát sinh do chính thay đổi của bạn.\n"
-                "5. ĐẢM BẢO CHẤT LƯỢNG:\n"
-                "   - Sử dụng FluentValidation để validate dữ liệu ở Backend.\n"
-                "   - Viết tests tuân thủ chuẩn AAA (Arrange - Act - Assert).\n\n"
-                "--- BẮT BUỘC TUÂN THỦ .NET/C# BEST PRACTICES & DESIGN PATTERNS (AGENTS SKILLS) ---\n"
-                "1. XML DOCUMENTATION:\n"
-                "   - Viết XML documentation comments (sử dụng dấu '///') đầy đủ cho TẤT CẢ các public classes, interfaces, methods và properties.\n"
-                "   - Ghi rõ mô tả cho từng tham số (<param>) và giá trị trả về (<returns>) trong tài liệu XML.\n"
-                "2. DEPENDENCY INJECTION & CONSTRUCTORS:\n"
-                "   - Bắt buộc dùng cú pháp Primary Constructor của C# 12+ cho DI (ví dụ: 'public class MyService(IDependency dependency)').\n"
-                "   - Thực hiện kiểm tra null bằng ArgumentNullException cho các dependency (ví dụ: 'ArgumentNullException.ThrowIfNull(dependency)').\n"
-                "3. THIẾT KẾ CÁC DESIGN PATTERNS CHUẨN:\n"
-                "   - Command Pattern: Triển khai CQRS Commands/Queries thông qua Handlers độc lập kế thừa MediatR interfaces.\n"
-                "   - Repository Pattern: Tương tác database thông qua các interfaces trừu tượng hóa để đảm bảo khả năng unit test và mock dễ dàng.\n"
-                "   - Resource Pattern: Sử dụng ResourceManager cho các chuỗi thông báo, phân chia log và lỗi (.resx files).\n"
-                "4. BỘ TIÊU CHUẨN KIỂM THỬ:\n"
-                "   - Sử dụng xUnit phối hợp cùng FluentAssertions để viết các khẳng định test sạch sẽ.\n"
-                "   - Sử dụng Moq để tạo dữ liệu giả lập cho các phụ thuộc bên ngoài khi viết Unit Tests.\n"
-                "   - Luôn test cả hai kịch bản Thành công (Success) và Thất bại (Failure), bao gồm cả kiểm chứng tham số null.\n\n"
-            )
-
-        system_instruction += (
-            "--- QUY TRÌNH HÀNH ĐỘNG REACT LOOP ---\n"
-            "Trong mỗi lượt phản hồi, bạn BẮT BUỘC phải đưa ra cấu trúc định dạng sau:\n"
-            "THOUGHT: Phân tích kỹ thuật của bạn về bước kế tiếp và các file cần đọc/ghi.\n"
-            "ACTION: Chỉ chọn DUY NHẤT một trong các lệnh sau để Harness thực thi:\n"
-            "   - read_source('đường_dẫn_file')\n"
-            "   - write_source('đường_dẫn_file', 'nội dung file mới')\n"
-            "   - execute_command('dotnet build'), execute_command('dotnet test') hoặc các lệnh git cơ bản (ví dụ: execute_command('git status') hoặc execute_command('git add . && git commit -m \"thông điệp\"'))\n"
-            "   - finish_task('thông điệp kết thúc chi tiết các file đã sửa và kết quả tests')\n"
-        )
-        
-        context_history = f"Yêu cầu của người dùng: {task_description}\n"
-        gan_retries = 0
-        max_gan_retries = 3
+        self.current_role = role
+        self.iteration_count = 0
+        context_history = initial_context
         
         while self.iteration_count < self.max_iterations:
-            self.iteration_count += 1
-            print(f"\n--- VÒNG LẶP SUY NGHĨ THỨ {self.iteration_count} ---")
-            
-            # 1. LLM Suy nghĩ và đưa ra quyết định hành động
-            response = self.call_llm(context_history, system_instruction)
-            print(response)
+            # 1. Gọi LLM
+            response = self.call_llm(context_history, system_instruction, stop_sequences=["OBSERVATION:", "Observation:", "=== OBSERVATION ==="])
+            self.print_agent_response(response)
             
             # Ghi log thought & action
             with open(self.log_file, "a", encoding="utf-8") as f:
-                f.write(f"\n[Lượt {self.iteration_count}]:\n{response}\n")
+                f.write(f"\n[{role} Lượt {self.iteration_count}]:\n{response}\n")
             
-            # Parse Action từ phản hồi của LLM
-            # Cực kỳ linh hoạt: Trích xuất action từ bất cứ định dạng nào của Generator Agent
-            action_name = None
-            action_args = ""
-            
-            # Loại bỏ các tag ``` và block nháy
-            cleaned_response = re.sub(r"```[a-zA-Z_]*", "", response)
+            # 1. Nếu LLM lặp lại lịch sử cuộc thoại (Lượt 0, Lượt 1...), chỉ lấy phần cuối cùng
+            turns = re.split(r"\bLượt \d+:", response, flags=re.IGNORECASE)
+            active_part = turns[-1] if turns else response
+
+            # 2. Làm sạch các ký tự markdown block
+            cleaned_response = re.sub(r"```[a-zA-Z_]*", "", active_part)
             cleaned_response = cleaned_response.replace("`", "")
             
-            action_match = re.search(r"\b(execute_command|read_source|write_source|finish_task)\((.*)\)", cleaned_response, re.DOTALL)
+            # 3. Phân tách theo từ khóa ACTION để chỉ lấy hành động cuối cùng được yêu cầu
+            action_blocks = re.split(r"\bACTION\s*:", cleaned_response, flags=re.IGNORECASE)
+            target_block = action_blocks[-1].strip() if action_blocks else cleaned_response.strip()
+
+            action_match = re.search(r"\b(execute_command|read_source|write_source|finish_task)\((.*)\)", target_block, re.DOTALL)
             if not action_match:
-                # Thử fallback về tên cũ để tương thích ngược nếu Agent quen tay
-                action_match = re.search(r"\b(run_command|read_file|write_file|done)\((.*)\)", cleaned_response, re.DOTALL)
+                action_match = re.search(r"\b(run_command|read_file|write_file|done)\((.*)\)", target_block, re.DOTALL)
                 
             if not action_match:
-                print("[Harness Error]: Không parse được ACTION từ Agent. Dừng vòng lặp.")
-                break
+                print(f"[Harness Error]: Không parse được ACTION từ Agent {role}. Yêu cầu sửa cú pháp...")
+                observation = format_observation(
+                    status="ERROR",
+                    summary="Lỗi cú pháp phản hồi.",
+                    details="Bạn bắt buộc phải đưa ra cấu trúc định dạng:\nTHOUGHT: <suy nghĩ>\nACTION: <tên_hàm>(<đối_số>)\nVui lòng chỉ chọn duy nhất một ACTION hợp lệ."
+                )
+                context_history += f"\nLượt {self.iteration_count}:\n{response}\nOBSERVATION: {observation}\n"
+                continue
                 
             action_name = action_match.group(1).strip()
             action_args = action_match.group(2).strip()
             
-            # Đồng bộ tên hàm cũ về tên mới để xử lý thống nhất
+            # Đồng bộ tên hàm cũ về tên mới
             if action_name == "run_command":
                 action_name = "execute_command"
             elif action_name == "read_file":
@@ -662,284 +862,440 @@ class AIDeveloperHarness:
             elif action_name == "done":
                 action_name = "finish_task"
             
-            parsed_args = safe_parse_action_arguments(action_args)
+            # Khớp ngoặc tròn của hàm chính xác bằng cách loại bỏ phần dư thừa ở cuối nếu có
+            parsed_args = None
+            try:
+                parsed_args = ast.literal_eval(f"({action_args})")
+                if parsed_args is not None and not isinstance(parsed_args, tuple):
+                    parsed_args = (parsed_args,)
+            except Exception:
+                pass
+
+            if parsed_args is None:
+                # Tìm dấu ngoặc đóng thích hợp từ phải qua trái
+                idx = len(action_args)
+                while idx > 0:
+                    idx = action_args.rfind(')', 0, idx)
+                    if idx == -1:
+                        break
+                    candidate = action_args[:idx]
+                    try:
+                        temp_parsed = ast.literal_eval(f"({candidate})")
+                        if temp_parsed is not None:
+                            if not isinstance(temp_parsed, tuple):
+                                parsed_args = (temp_parsed,)
+                            else:
+                                parsed_args = temp_parsed
+                            action_args = candidate
+                            break
+                    except Exception:
+                        pass
+                        
+            if parsed_args is None:
+                parsed_args = safe_parse_action_arguments(action_args)
             observation = ""
             
             # 2. Thực thi Hành động tương ứng
             if self.mock_mode:
-                if action_name == "execute_command":
-                    cmd = parsed_args[0] if len(parsed_args) > 0 else ""
-                    observation = format_observation(
-                        status="SUCCESS",
-                        summary=f"(MOCK): Chạy thành công lệnh '{cmd}'",
-                        details="(Chạy giả lập - không thực hiện lệnh hệ thống thật).",
-                        next_actions=["execute_command('dotnet test')", "finish_task(...)"]
-                    )
-                elif action_name == "read_source":
-                    filepath = parsed_args[0] if len(parsed_args) > 0 else ""
-                    observation = format_observation(
-                        status="SUCCESS",
-                        summary=f"(MOCK): Đọc thành công '{filepath}'",
-                        details="(Chế độ giả lập - trả về nội dung mẫu).",
-                        artifacts=[filepath]
-                    )
-                elif action_name == "write_source":
-                    filepath = parsed_args[0] if len(parsed_args) > 0 else ""
-                    observation = format_observation(
-                        status="SUCCESS",
-                        summary=f"(MOCK): Đã ghi thành công '{filepath}'",
-                        details="(Chế độ giả lập - không ghi đè đĩa thật).",
-                        artifacts=[filepath]
-                    )
-                elif action_name == "finish_task":
-                    msg = parsed_args[0] if len(parsed_args) > 0 else ""
-                    print(f"\n🎉 [GENERATOR HOÀN THÀNH - MOCK MODE]: {msg}")
-                    
-                    # Chạy kiểm thử đối nghịch
-                    score, report = self.run_gan_evaluation(task_description)
-                    print(f"\n🏆 [EVALUATION SCORECARD]: THANG ĐIỂM ĐẠT ĐƯỢC: {score:.2f}/10.0 (Yêu cầu tối thiểu: {self.pass_threshold})")
-                    print(report)
-                    
-                    # Ghi báo cáo ra thư mục .claude/evals/
-                    report_path = os.path.join(self.evals_dir, "evaluation_report.md")
-                    with open(report_path, "w", encoding="utf-8") as f:
-                        f.write(report)
-                    
-                    if score >= self.pass_threshold or gan_retries >= max_gan_retries:
-                        print(f"\n✅ [Harness Success]: Đã vượt qua vòng kiểm duyệt đối nghịch thành công!")
-                        break
+                if action_name == "finish_task":
+                    finish_msg = parsed_args[0] if len(parsed_args) > 0 else ""
+                    success, feedback = on_finish_callback(finish_msg)
+                    if success:
+                        print(f"✅ [Agent {role}] hoàn thành xuất sắc nhiệm vụ.")
+                        return finish_msg
                     else:
-                        gan_retries += 1
-                        print(f"\n❌ [Harness Critique]: Không vượt qua kiểm duyệt! Đang gửi phản hồi cải tiến cho Agent sửa đổi...")
                         observation = format_observation(
                             status="ERROR",
-                            summary=f"Hệ thống đánh giá đối nghịch từ chối phê duyệt (Điểm: {score:.2f} < {self.pass_threshold}).",
-                            details=report,
-                            next_actions=["Hãy chỉnh sửa code dựa trên các điểm phê bình trong phần DETAILS.", "Viết lại tài liệu XML và kiểm tra kỹ logic."]
+                            summary="Người đánh giá yêu cầu chỉnh sửa.",
+                            details=feedback,
+                            next_actions=["Điều chỉnh thiết kế hoặc sửa lỗi theo ý kiến góp ý."]
                         )
                 else:
-                    observation = format_observation(
-                        status="SUCCESS",
-                        summary=f"Thực hiện thành công công cụ '{action_name}'",
-                        details="(Mock mode)"
-                    )
+                    observation = self.execute_mock_action(action_name, parsed_args)
             else:
-                # Thực thi hành động thật trên ổ đĩa và hệ điều hành (Chế độ chạy thực tế)
                 if action_name == "execute_command":
                     cmd = parsed_args[0] if len(parsed_args) > 0 else ""
-                    # Kiểm tra xem có phải lệnh git an toàn không
+                    # Kiểm tra xem có phải lệnh git hoặc dotnet an toàn không
                     is_git = cmd.startswith("git ") and any(sub in cmd for sub in ["status", "add", "commit", "diff"])
+                    allowed_cmds = ["dotnet build", "dotnet test", "dotnet restore", "dotnet clean"]
                     
-                    if cmd not in ["dotnet build", "dotnet test", "dotnet restore", "dotnet clean"] and not is_git:
+                    if cmd not in allowed_cmds and not is_git:
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
-                            details="Harness chỉ cho phép chạy lệnh 'dotnet build', 'dotnet test', 'dotnet restore', 'dotnet clean' hoặc các lệnh git cơ bản (status, add, commit, diff).",
-                            next_actions=["Chỉ sử dụng lệnh hợp lệ."]
+                            details=f"Harness nghiêm cấm chạy các lệnh tùy ý. Lệnh hợp lệ: {', '.join(allowed_cmds)} hoặc git status/diff/add/commit.",
                         )
                     else:
-                        # Bắt buộc phải có sự phê duyệt của con người đối với các lệnh thay đổi git (commit, add) kể cả khi bật --auto-approve
                         is_git_change = "git " in cmd and any(sub in cmd for sub in ["commit", "add"])
-                        
-                        if self.ask_approval(f"Agent muốn chạy lệnh hệ thống cục bộ: '{cmd}'", force_ask=is_git_change):
+                        if self.ask_approval(f"Agent muốn chạy lệnh hệ thống: '{cmd}'", force_ask=is_git_change):
                             code, out = run_dotnet_command(cmd)
-                            
                             status = "SUCCESS" if code == 0 else "ERROR"
-                            summary = f"Chạy lệnh '{cmd}' thành công." if code == 0 else f"Lệnh '{cmd}' thất bại với mã lỗi {code}."
-                            next_actions = []
-                            details = out[:1500]
-                            
+                            details = out[:3000]
                             if code != 0:
                                 if "build" in cmd:
                                     comp_errs = extract_compiler_errors(out)
                                     if comp_errs:
-                                        details += "\n\n--- DANH SÁCH LỖI BIÊN DỊCH ---\n" + "\n".join(comp_errs)
-                                        next_actions.append("Sửa lỗi biên dịch được liệt kê chi tiết trong DETAILS.")
+                                        details += "\n\n--- CS COMPILER ERRORS ---\n" + "\n".join(comp_errs)
                                 elif "test" in cmd:
                                     test_errs = extract_test_errors(out)
                                     if test_errs:
-                                        details += "\n\n--- DANH SÁCH TEST CASE THẤT BẠI ---\n" + "\n".join(test_errs)
-                                        next_actions.append("Sửa các test cases thất bại trong phần DETAILS.")
-                            else:
-                                if "build" in cmd:
-                                    next_actions.append("Chạy tiếp lệnh execute_command('dotnet test') để xác minh tính đúng đắn.")
-                                elif "test" in cmd:
-                                    next_actions.append("Thực hiện lệnh finish_task(...) để kết thúc tác vụ.")
-                                    
+                                        details += "\n\n--- FAILED TEST CASES ---\n" + "\n".join(test_errs)
+                                        
                             observation = format_observation(
                                 status=status,
-                                summary=summary,
-                                details=details,
-                                next_actions=next_actions
+                                summary=f"Chạy lệnh '{cmd}' " + ("thành công." if code == 0 else "thất bại."),
+                                details=details
                             )
                         else:
-                            print("🛡️  [Harness]: Từ chối thực thi lệnh hệ thống theo yêu cầu của bạn.")
                             observation = format_observation(
                                 status="ERROR",
-                                summary="Người dùng từ chối cấp quyền.",
-                                details="Người dùng đã nhấn từ chối trên console.",
-                                next_actions=["Đề xuất một lệnh khác an toàn hơn hoặc hỏi ý kiến người dùng."]
+                                summary="Từ chối chạy lệnh.",
+                                details="Người dùng từ chối cấp quyền chạy lệnh này."
                             )
-                        
+                            
                 elif action_name == "read_source":
                     filepath = parsed_args[0] if len(parsed_args) > 0 else ""
-                    
-                    # Kiểm tra bảo mật đường dẫn nhạy cảm
-                    normalized_path = filepath.lower().replace("\\", "/")
-                    if "ai_developer_harness.py" in normalized_path or ".env" in normalized_path:
-                        observation = format_observation(
-                            status="ERROR",
-                            summary="Lỗi bảo mật Harness.",
-                            details="Harness không cho phép đọc trực tiếp file cấu hình nhạy cảm (.env) hoặc file chạy của chính Harness (ai_developer_harness.py).",
-                            next_actions=["Hãy đọc các file nguồn dự án khác."]
-                        )
-                    else:
-                        content = read_source_file(filepath)
-                        
-                        status = "SUCCESS" if not content.startswith("Lỗi đọc file:") else "ERROR"
-                        summary = f"Đọc file '{filepath}' thành công." if status == "SUCCESS" else content
-                        
-                        # Tránh làm quá tải context nếu file quá dài
-                        details = content
-                        if len(content) > 12000:
-                            details = content[:12000] + "\n\n...[FILE BỊ CẮT GIẢM VÌ QUÁ DÀI - TRÁNH VƯỢT QUÁ NGỮ CẢNH]..."
-                            
-                        observation = format_observation(
-                            status=status,
-                            summary=summary,
-                            details=details,
-                            artifacts=[filepath]
-                        )
+                    content = read_source_file(filepath)
+                    status = "SUCCESS" if not content.startswith("Lỗi đọc file") else "ERROR"
+                    details = content[:12000] + ("\n...[TRUNCATED]..." if len(content) > 12000 else "")
+                    observation = format_observation(
+                        status=status,
+                        summary=f"Đọc file '{filepath}' " + ("thành công." if status == "SUCCESS" else "thất bại."),
+                        details=details,
+                        artifacts=[filepath]
+                    )
                     
                 elif action_name == "write_source":
                     filepath = parsed_args[0] if len(parsed_args) > 0 else ""
                     content = parsed_args[1] if len(parsed_args) > 1 else ""
                     
-                    # Kiểm tra bảo mật đường dẫn nhạy cảm
-                    normalized_path = filepath.lower().replace("\\", "/")
+                    # ⚠️ RÀNG BUỘC GUARDRAIL THEO VAI TRÒ
+                    try:
+                        # Chuyển đổi về đường dẫn tương đối so với thư mục gốc dự án
+                        rel_path = os.path.relpath(os.path.abspath(filepath), root_dir)
+                    except Exception:
+                        rel_path = filepath
+                    normalized_path = rel_path.lower().replace("\\", "/")
+                    
                     if "ai_developer_harness.py" in normalized_path or ".env" in normalized_path:
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
-                            details="Harness nghiêm cấm ghi đè hoặc sửa đổi file cấu hình nhạy cảm (.env) hoặc file chạy của chính Harness (ai_developer_harness.py).",
-                            next_actions=["Hãy chỉnh sửa các file nguồn dự án khác."]
+                            details="Nghiêm cấm sửa đổi file cấu hình hệ thống hoặc file harness.",
+                        )
+                    elif role == "Planner" and not (normalized_path.startswith("docs/") or "execution_plan.md" in normalized_path):
+                        observation = format_observation(
+                            status="ERROR",
+                            summary="Ràng buộc vai trò Planner.",
+                            details="Với vai trò Planner, bạn chỉ được phép ghi kế hoạch/đặc tả vào thư mục docs/ hoặc file plan. Không được sửa đổi mã nguồn.",
+                        )
+                    elif role == "TestWriter" and not ("test" in normalized_path or "tests" in normalized_path):
+                        observation = format_observation(
+                            status="ERROR",
+                            summary="Ràng buộc vai trò TestWriter.",
+                            details="Với vai trò TestWriter, bạn chỉ được phép ghi hoặc sửa đổi file test (nằm trong thư mục tests hoặc tên file chứa 'test'). Không sửa đổi code production.",
                         )
                     else:
-                        # Hiển thị Preview thay đổi trước khi phê duyệt
+                        # Hiển thị Preview trước khi lưu
                         print(f"\n==========================================")
-                        print(f"📄 PREVIEW NỘI DUNG SẮP GHI VÀO FILE: '{filepath}'")
+                        print(f"📄 PREVIEW FILE CẦN GHI: '{filepath}' ({role})")
                         print(f"==========================================")
                         print(content[:500] + ("\n...[còn tiếp]..." if len(content) > 500 else ""))
                         print(f"==========================================\n")
                         
-                        if self.ask_approval(f"Agent muốn ghi/sửa đổi nội dung file: '{filepath}'"):
+                        if self.ask_approval(f"Đồng ý cho Agent ghi file: '{filepath}'?"):
                             res = write_source_file(filepath, content)
                             status = "SUCCESS" if res == "Ghi file thành công." else "ERROR"
-                            
                             observation = format_observation(
                                 status=status,
-                                summary=f"Ghi file '{filepath}' thành công." if status == "SUCCESS" else res,
+                                summary=res,
                                 details=res,
                                 artifacts=[filepath]
                             )
                         else:
-                            print("🛡️  [Harness]: Từ chối ghi file theo yêu cầu của bạn.")
                             observation = format_observation(
                                 status="ERROR",
-                                summary="Người dùng từ chối ghi file.",
-                                details="Người dùng từ chối phê duyệt ghi tệp tin lên đĩa cứng.",
-                                next_actions=["Hỏi lại ý kiến hoặc điều chỉnh nội dung khác."]
+                                summary="Từ chối ghi file.",
+                                details="Người dùng từ chối ghi tệp tin lên đĩa cứng."
                             )
-                        
+                            
                 elif action_name == "finish_task":
-                    msg = parsed_args[0] if len(parsed_args) > 0 else ""
-                    print(f"\n🎉 [GENERATOR HOÀN THÀNH TÁC VỤ]: {msg}")
-                    
-                    # Kích hoạt GAN Adversarial Evaluator để duyệt code thực tế
-                    score, report = self.run_gan_evaluation(task_description)
-                    print(f"\n🏆 [EVALUATION SCORECARD]: THANG ĐIỂM ĐẠT ĐƯỢC: {score:.2f}/10.0 (Yêu cầu tối thiểu: {self.pass_threshold})")
-                    print(report)
-                    
-                    # Ghi báo cáo ra thư mục .claude/evals/
-                    report_path = os.path.join(self.evals_dir, "evaluation_report.md")
-                    with open(report_path, "w", encoding="utf-8") as f:
-                        f.write(report)
-                    
-                    if score >= self.pass_threshold or gan_retries >= max_gan_retries:
-                        print(f"\n✅ [Harness Success]: Đã vượt qua vòng kiểm duyệt đối nghịch thành công!")
-                        break
+                    finish_msg = parsed_args[0] if len(parsed_args) > 0 else ""
+                    success, feedback = on_finish_callback(finish_msg)
+                    if success:
+                        return finish_msg
                     else:
-                        gan_retries += 1
-                        print(f"\n❌ [Harness Critique]: Không vượt qua kiểm duyệt! Đang gửi phản hồi cải tiến cho Agent sửa đổi...")
-                        
-                        # 🔄 [HỆ THỐNG PHỤC HỒI]: Tự động rollback các tệp đã thay đổi chưa commit để bắt đầu lại sạch sẽ
-                        print("\n🔄 [Harness Recovery]: Đang tự động khôi phục workspace sạch (Git Rollback) để Agent sửa đổi hướng đi mới...")
-                        rollback_message = ""
-                        try:
-                            # Khôi phục các tệp chưa commit để dọn rác lỗi biên dịch cũ
-                            subprocess.run("git checkout -- .", shell=True, capture_output=True)
-                            # Xóa các file mới untracked để tránh lỗi biên dịch của C# quét đệ quy
-                            subprocess.run("git clean -fd", shell=True, capture_output=True)
-                            
-                            rollback_message = (
-                                "\n\n🔄 [HỆ THỐNG PHỤC HỒI]: Harness đã tự động khôi phục toàn bộ workspace (git checkout -- . && git clean -fd) "
-                                "về trạng thái commit sạch gần nhất nhằm dọn dẹp triệt để các lỗi biên dịch hoặc các file bị tạo sai vị trí. "
-                                "Hãy thiết kế một hướng giải quyết mới, an toàn hơn để thực hiện lại nhiệm vụ!"
-                            )
-                            print("✅ [Harness Recovery]: Khôi phục workspace sạch thành công!")
-                        except Exception as e:
-                            rollback_message = f"\n\n🔄 [HỆ THỐNG PHỤC HỒI]: Lỗi khi cố gắng khôi phục workspace: {str(e)}"
-                            print(f"❌ [Harness Recovery]: Thất bại: {e}")
-                            
                         observation = format_observation(
                             status="ERROR",
-                            summary=f"Hệ thống đánh giá đối nghịch từ chối phê duyệt (Điểm: {score:.2f} < {self.pass_threshold}).",
-                            details=report + rollback_message,
-                            next_actions=["Dựa trên các điểm phê bình trong DETAILS và workspace sạch đã được khôi phục, hãy viết lại giải pháp đúng đắn."]
+                            summary="Yêu cầu sửa đổi từ Kỹ sư/Evaluator.",
+                            details=feedback,
+                            next_actions=["Dựa trên feedback chi tiết trong DETAILS, hãy chỉnh sửa lại."]
                         )
                 else:
                     observation = format_observation(
                         status="ERROR",
-                        summary="Công cụ không được hỗ trợ.",
-                        details=f"Không có công cụ nào mang tên '{action_name}'.",
-                        next_actions=["Chỉ chọn read_source, write_source, execute_command, finish_task."]
+                        summary="Công cụ không hợp lệ.",
+                        details=f"Không hỗ trợ action '{action_name}'."
                     )
-                
-            print(f"\n[Quan sát kết quả từ Harness]:\n{observation[:300]}...")
             
-            # Ghi log observation
+            # Ghi log Observation
             with open(self.log_file, "a", encoding="utf-8") as f:
                 f.write(f"\nOBSERVATION:\n{observation}\n")
                 
-            # 📉 [OpenHands Context Condensation]: Nén lịch sử ngữ cảnh để tiết kiệm token và tránh trôi ngữ cảnh
+            # Nén lịch sử
             condensed_observation = observation
             if "=== OBSERVATION ===" in observation:
-                if action_name == "read_source":
-                    filepath = parsed_args[0] if len(parsed_args) > 0 else ""
-                    condensed_observation = format_observation(
-                        status="SUCCESS",
-                        summary=f"Đọc file '{filepath}' thành công.",
-                        details="(Nội dung chi tiết của file đã được lưu vào bộ nhớ ngữ cảnh làm việc của bạn ở lượt trước, vui lòng không yêu cầu đọc lại trừ khi thực sự cần thiết.)",
-                        artifacts=[filepath]
-                    )
-                elif action_name == "execute_command" and "SUCCESS" in observation and len(observation) > 1000:
+                if action_name == "execute_command" and "SUCCESS" in observation and len(observation) > 1500:
                     cmd = parsed_args[0] if len(parsed_args) > 0 else ""
                     condensed_observation = format_observation(
                         status="SUCCESS",
                         summary=f"Thực thi lệnh '{cmd}' thành công.",
-                        details="(Log thực thi thành công chi tiết đã được lược bỏ để tiết kiệm token ngữ cảnh.)"
+                        details="(Chi tiết log thành công đã lược bỏ.)"
                     )
-
-            # Cập nhật lịch sử để Agent suy nghĩ cho lượt kế tiếp
+                    
             context_history += f"\nLượt {self.iteration_count}:\n{response}\nOBSERVATION: {condensed_observation}\n"
             
-            # Nếu nhận được critique từ evaluator, chúng tôi hoàn lại số lượt lặp để agent có đủ cơ hội chỉnh sửa
-            if action_name == "finish_task" and score < self.pass_threshold:
-                # Trả lại tối đa 2 iterations để tránh bùng nổ token nhưng vẫn đủ sửa code
-                self.max_iterations = max(self.max_iterations, self.iteration_count + 2)
+            if action_name == "finish_task" and not success:
+                self.max_iterations = max(self.max_iterations, self.iteration_count + 3)
+                
+        print(f"⚠️ [Harness Alert]: Agent {role} đạt giới hạn lặp tối đa.")
+        return ""
+
+    def execute_pipeline(self, task_description: str):
+        """Thực thi toàn bộ quy trình: Lập Plan -> Viết Test -> Lập trình -> Đánh giá đối nghịch."""
+        print(f"\n=============================================================")
+        print(f"🚀 KHỞI ĐỘNG SPEC-DRIVEN PIPELINE CHO TÁC VỤ:")
+        print(f"   👉 '{task_description}'")
+        print(f"=============================================================")
         
-        if self.iteration_count >= self.max_iterations:
-            print(f"\n⚠️ [Harness Alert]: Đạt giới hạn lặp tối đa ({self.max_iterations}). Ngắt khẩn cấp để tránh bùng nổ chi phí.")
+        # 1. Đọc chính sách lập trình cục bộ (CODING_POLICY.md hoặc CLAUDE.md)
+        # Đã tự động nạp từ __init__, nhưng nạp lại để cập nhật thay đổi mới nhất nếu có.
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.dirname(script_dir)
+        policy_files = ["CODING_POLICY.md", "CLAUDE.md"]
+        for p_file in policy_files:
+            p_path = os.path.join(root_dir, p_file)
+            if os.path.exists(p_path):
+                try:
+                    with open(p_path, "r", encoding="utf-8") as f:
+                        self.policy_content = f.read()
+                    print(f"📖 [Harness Control]: Đang nạp chính sách lập trình mới nhất từ '{p_file}'...")
+                    break
+                except Exception as e:
+                    print(f"⚠️ [Harness Control]: Lỗi đọc file {p_file}: {e}")
+
+        # 2. Xây dựng System Instructions cho từng vai trò
+        react_instruction = (
+            "\n\n=============================================================\n"
+            "⚠️ QUY TẮC PHẢN HỒI (REACT FORMAT) - BẮT BUỘC TUÂN THỦ:\n"
+            "Mỗi lượt phản hồi của bạn BẮT BUỘC phải chia làm 2 phần rõ ràng theo đúng cấu trúc sau:\n"
+            "THOUGHT: <suy nghĩ của bạn về bước tiếp theo, phân tích kết quả quan sát trước đó>\n"
+            "ACTION: <tên_hàm>(<các đối số>)\n\n"
+            "Danh sách các ACTION duy nhất bạn được phép sử dụng:\n"
+            "1. `read_source(file_path)`: Đọc nội dung của một file nguồn.\n"
+            "   Ví dụ: ACTION: read_source(\"Domain/Entities/Post.cs\")\n"
+            "2. `write_source(file_path, content)`: Ghi hoặc cập nhật file nguồn. Lưu ý: chuỗi `content` phải được bọc trong nháy kép hoặc nháy đơn. Nếu nội dung có nhiều dòng hoặc chứa dấu nháy, hãy chú ý escape (thêm dấu gạch chéo ngược `\\\\` trước các dấu nháy trùng loại ở trong nội dung).\n"
+            "   Ví dụ: ACTION: write_source(\"FloraCore.Tests/MyTest.cs\", \"using Xunit;\\\\n...\")\n"
+            "3. `execute_command(command)`: Thực thi một lệnh hệ thống.\n"
+            "   Các lệnh được phép chạy CHỈ BAO GỒM: 'dotnet build', 'dotnet test', 'dotnet restore', 'dotnet clean', 'git status', 'git diff', 'git add', 'git commit'. Tuyệt đối không được chạy bất kỳ lệnh nào khác.\n"
+            "   Ví dụ: ACTION: execute_command(\"dotnet test\")\n"
+            "4. `finish_task(summary)`: Hoàn thành nhiệm vụ được giao và báo cáo tóm tắt kết quả cho Kỹ sư / Evaluator.\n"
+            "   Ví dụ: ACTION: finish_task(\"Đã viết xong các unit tests và kiểm tra build thành công.\")\n\n"
+            "🚨 RÀNG BUỘC CỰC KỲ QUAN TRỌNG:\n"
+            "- Bạn CHỈ được phép chọn duy nhất 1 ACTION trong mỗi lượt phản hồi.\n"
+            "- Tuyệt đối KHÔNG tự ý tạo ra hoặc sử dụng các ACTION khác như `ask_user`, `read_file`, `create_new_file`, `ask_user()`, `create_file`... Nếu bạn làm vậy, hệ thống sẽ báo lỗi cú pháp và bạn sẽ bị kẹt.\n"
+            "- Không viết thêm bất kỳ văn bản giải thích nào ngoài 2 khối `THOUGHT:` và `ACTION:` nêu trên.\n"
+            "=============================================================\n"
+        )
+
+        planner_system = (
+            "Bạn là một AI Software Architect cực kỳ thông minh, làm việc trên dự án .NET 9 FloraCore (Clean Architecture).\n"
+            "Nhiệm vụ của bạn là lập kế hoạch thực thi (AI Execution Plan) chi tiết và phân rã các task nhỏ để phân phối cho các Agent khác.\n"
+            "Bạn cần khảo sát cấu trúc dự án (bằng cách đọc các file liên quan nếu cần) và xây dựng một kế hoạch bao gồm:\n"
+            "- Phân tích kiến trúc: Cần tạo mới/chỉnh sửa các thực thể (Domain), DTO/Queries/Commands/Handlers (Application), AppDbContext/Repository (Infrastructure), Controllers (Web/API).\n"
+            "- Đặc tả chi tiết các thay đổi.\n"
+            "- Danh sách các test cases cần viết trước (TDD).\n"
+            "Sau khi hoàn thành bản kế hoạch, bạn BẮT BUỘC phải gọi `finish_task('<nội dung kế hoạch chi tiết bằng Markdown>')` để Kỹ sư con người phê duyệt."
+        )
+        if self.policy_content:
+            planner_system += f"\n\n--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
+        planner_system += react_instruction
+
+        testwriter_system = (
+            "Bạn là một QA/Developer chuyên viết unit test và integration test sử dụng xUnit và FluentAssertions cho dự án .NET 9 FloraCore.\n"
+            "Nhiệm vụ của bạn là hiện thực hóa các kịch bản test theo Bản kế hoạch (Execution Plan) đã được phê duyệt.\n"
+            "Bạn chỉ được phép ghi hoặc sửa đổi các tệp kiểm thử trong thư mục kiểm thử (ví dụ: FloraCore.Tests hoặc các file có hậu tố Tests.cs).\n"
+            "Tuyệt đối KHÔNG ĐƯỢC sửa đổi bất kỳ tệp code production nào (trong Domain, Application, Infrastructure, Controllers).\n"
+            "Sau khi viết xong các test cases, hãy chạy `dotnet build` để đảm bảo chúng biên dịch thành công. LƯU Ý: các test cases có thể thất bại khi chạy vì code production chưa được viết.\n"
+            "Gọi `finish_task('<báo cáo các file test đã viết>')` khi hoàn thành."
+        )
+        if self.policy_content:
+            testwriter_system += f"\n\n--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
+        testwriter_system += react_instruction
+
+        developer_system = (
+            "Bạn là một Kỹ sư .NET 9 Senior, làm việc trên dự án FloraCore (Clean Architecture + CQRS + MediatR).\n"
+            "Nhiệm vụ của bạn là hiện thực hóa logic nghiệp vụ trong các lớp Domain, Application, Infrastructure, Controllers dựa trên Bản kế hoạch (Execution Plan) và vượt qua toàn bộ các test cases đã được viết.\n"
+            "Hãy tuân thủ nghiêm ngặt chính sách lập trình (CODING_POLICY.md).\n"
+            "Bạn được phép đọc tất cả các file và ghi vào các file production code. Tuyệt đối KHÔNG sửa đổi file cấu hình hệ thống (.env) hoặc file harness (`ai_developer_harness.py`).\n"
+            "Thường xuyên chạy `dotnet build` và `dotnet test` để kiểm tra tiến trình.\n"
+            "Sau khi vượt qua toàn bộ tests và không còn lỗi linter, hãy gọi `finish_task('<báo cáo chi tiết các file đã sửa đổi>')` để gửi cho Evaluator.\n\n"
+        )
+        if self.policy_content:
+            developer_system += f"--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
+        developer_system += react_instruction
+
+        # 3. Định nghĩa các Callback kết thúc cho từng pha
+        
+        # --- CALLBACK PHA 1: PLANNING ---
+        def on_planner_finish(plan_content: str):
+            print("\n=============================================================")
+            print("📋 BẢN KẾ HOẠCH THỰC THI (PROPOSED EXECUTION PLAN):")
+            print("=============================================================")
+            print(plan_content)
+            print("=============================================================\n")
+            
+            plan_dir = os.path.join(root_dir, "docs", "plans")
+            os.makedirs(plan_dir, exist_ok=True)
+            plan_path = os.path.join(plan_dir, "execution_plan.md")
+            try:
+                with open(plan_path, "w", encoding="utf-8") as f:
+                    f.write(plan_content)
+                print(f"💾 Đã lưu kế hoạch vào: docs/plans/execution_plan.md")
+            except Exception as e:
+                print(f"⚠️ Không thể lưu file kế hoạch: {e}")
+                
+            approved = self.ask_approval("Bạn có đồng ý phê duyệt Bản kế hoạch thực thi này không?", force_ask=True)
+            if approved:
+                return True, ""
+            else:
+                feedback = input("\n📝 Nhập ý kiến góp ý/yêu cầu sửa đổi của bạn cho bản kế hoạch:\n👉 ")
+                return False, f"Kỹ sư con người từ chối phê duyệt bản kế hoạch này với ý kiến đóng góp sau:\n{feedback}"
+
+        # --- CALLBACK PHA 2: TEST WRITING ---
+        def on_testwriter_finish(test_report: str):
+            print("\n=============================================================")
+            print("🧪 THÔNG BÁO TỪ TESTWRITER AGENT:")
+            print("=============================================================")
+            print(test_report)
+            print("=============================================================\n")
+            
+            if self.mock_mode:
+                approved = self.ask_approval("Bạn có phê duyệt bộ Test Cases này không?", force_ask=True)
+                if approved:
+                    return True, ""
+                feedback = input("\n📝 Nhập ý kiến góp ý cho bộ test cases:\n👉 ")
+                return False, f"Kỹ sư từ chối phê duyệt với phản hồi:\n{feedback}"
+                
+            print("⚙️ Đang biên dịch bộ test mới...")
+            code, out = run_dotnet_command("dotnet build")
+            if code != 0:
+                print("❌ Lỗi biên dịch bộ tests!")
+                errs = extract_compiler_errors(out)
+                return False, f"Lỗi biên dịch mã nguồn khi tích hợp test mới:\n" + "\n".join(errs)
+                
+            print("\n🔍 Git Diff của thư mục test:")
+            diff_res = subprocess.run("git diff HEAD -- *Tests*", shell=True, capture_output=True, encoding='utf-8')
+            print(diff_res.stdout or "Không phát hiện thay đổi trong thư mục test.")
+            
+            approved = self.ask_approval("Bạn có phê duyệt bộ Test Cases trên không?", force_ask=True)
+            if approved:
+                return True, ""
+            else:
+                feedback = input("\n📝 Nhập ý kiến góp ý/yêu cầu sửa đổi cho bộ test cases:\n👉 ")
+                return False, f"Kỹ sư con người không phê duyệt bộ test cases này với lý do:\n{feedback}"
+
+        # --- CALLBACK PHA 3 & 4: IMPLEMENTATION & EVALUATION ---
+        def on_developer_finish(dev_report: str):
+            print("\n=============================================================")
+            print("💻 THÔNG BÁO TỪ DEVELOPER AGENT:")
+            print("=============================================================")
+            print(dev_report)
+            print("=============================================================\n")
+            
+            if self.mock_mode:
+                score, report = self.run_gan_evaluation(task_description)
+                print(f"\n🏆 THANG ĐIỂM ĐẠT ĐƯỢC: {score:.2f}/10.0 (Yêu cầu tối thiểu: {self.pass_threshold})")
+                print(report)
+                if score >= self.pass_threshold:
+                    return True, ""
+                else:
+                    return False, f"Evaluator từ chối với điểm {score:.2f} < {self.pass_threshold}.\nBáo cáo:\n{report}"
+                    
+            print("⚙️ Chạy build hệ thống...")
+            code, out = run_dotnet_command("dotnet build")
+            if code != 0:
+                errs = extract_compiler_errors(out)
+                return False, "Không thể build hệ thống sau khi code. Chi tiết lỗi:\n" + "\n".join(errs)
+                
+            print("⚙️ Chạy tests hệ thống...")
+            t_code, t_out = run_dotnet_command("dotnet test")
+            if t_code != 0:
+                errs = extract_test_errors(t_out)
+                return False, "Một số bài test thất bại hoặc lỗi biên dịch test. Chi tiết:\n" + "\n".join(errs)
+                
+            # Duyệt Pha 4: Chấm điểm đối nghịch
+            score, report = self.run_gan_evaluation(task_description)
+            print(f"\n🏆 [EVALUATION SCORECARD]: THANG ĐIỂM ĐẠT ĐƯỢC: {score:.2f}/10.0 (Yêu cầu tối thiểu: {self.pass_threshold})")
+            print(report)
+            
+            report_path = os.path.join(self.evals_dir, "evaluation_report.md")
+            try:
+                with open(report_path, "w", encoding="utf-8") as f:
+                    f.write(report)
+            except Exception as e:
+                print(f"⚠️ Lỗi ghi report: {e}")
+                
+            if score >= self.pass_threshold:
+                print("\n✅ Vượt qua vòng thẩm định chất lượng!")
+                return True, ""
+            else:
+                # 🔄 Rollback phân đoạn thông minh (Giữ nguyên test cases, rollback production code)
+                rollback_log = self.selective_rollback()
+                print(f"\n⚠️ Rollback log:\n{rollback_log}")
+                return False, (
+                    f"Hệ thống Evaluator từ chối phê duyệt code triển khai vì chưa đạt chuẩn chất lượng (Điểm: {score:.2f} < {self.pass_threshold}).\n"
+                    f"--- BÁO CÁO PHÊ BÌNH CỦA EVALUATOR ---\n{report}\n\n"
+                    f"--- HẬU QUẢ ROLLBACK ---\n{rollback_log}\n\n"
+                    f"Vui lòng thiết kế hướng đi khác để hoàn thành task đạt chất lượng hơn."
+                )
+
+        # 4. CHẠY PIPELINE
+        
+        # --- CHẠY PHA 1: PLANNING ---
+        plan = self.run_agent_loop(
+            role="Planner",
+            system_instruction=planner_system,
+            initial_context=f"Yêu cầu nhiệm vụ: {task_description}\n\nHãy khảo sát mã nguồn và lập Bản kế hoạch thực thi (AI Execution Plan) chi tiết. Sử dụng finish_task để gửi kế hoạch.",
+            on_finish_callback=on_planner_finish
+        )
+        if not plan:
+            print("❌ Pha lập kế hoạch thất bại hoặc bị ngắt sớm. Dừng pipeline.")
+            return
+
+        # --- CHẠY PHA 2: TEST WRITING ---
+        test_report = self.run_agent_loop(
+            role="TestWriter",
+            system_instruction=testwriter_system,
+            initial_context=f"Bản kế hoạch đã duyệt:\n{plan}\n\nHãy viết các file unit/integration test phản ánh đúng đặc tả này. Chỉ sửa thư mục test. Gọi finish_task khi hoàn thành.",
+            on_finish_callback=on_testwriter_finish
+        )
+        if not test_report:
+            print("❌ Pha viết test thất bại hoặc bị ngắt sớm. Dừng pipeline.")
+            return
+
+        # --- CHẠY PHA 3 & 4: LẬP TRÌNH VÀ THẨM ĐỊNH ĐỐI NGHỊCH ---
+        dev_report = self.run_agent_loop(
+            role="Developer",
+            system_instruction=developer_system,
+            initial_context=f"Bản kế hoạch:\n{plan}\n\nBáo cáo test cases:\n{test_report}\n\nHãy bắt đầu sửa code production để pass tất cả tests. Gọi finish_task khi hoàn tất.",
+            on_finish_callback=on_developer_finish
+        )
+        if not dev_report:
+            print("❌ Pha lập trình/thẩm định thất bại hoặc bị ngắt sớm. Dừng pipeline.")
+            return
+            
+        print("\n🎉 [PIPELINE SUCCESS]: Đã hoàn thành tác vụ xuất sắc thông qua Spec-Driven Development!")
 
 if __name__ == "__main__":
     task = "Hãy kiểm tra xem dự án hiện tại build và chạy thử nghiệm tests thành công không."
@@ -951,9 +1307,15 @@ if __name__ == "__main__":
         auto_approve = True
         args.remove("--auto-approve")
         
+    mock_mode_flag = False
+    if "--mock" in args:
+        mock_mode_flag = True
+        args.remove("--mock")
+        
     if len(args) > 0:
-        # Nếu có truyền yêu cầu tùy biến
         task = args[0]
         
     harness = AIDeveloperHarness(auto_approve=auto_approve)
-    harness.execute_react_loop(task)
+    if mock_mode_flag:
+        harness.mock_mode = True
+    harness.execute_pipeline(task)

@@ -43,7 +43,9 @@ public class GetCartQueryHandler : IRequestHandler<GetCartQuery, CartDto>
             {
                 ProductId = i.ProductId,
                 ProductName = i.Product.Name,
-                Price = i.Product.Price,
+                OriginalPrice = i.Product.Price,
+                Price = i.Product.GetDiscountedPrice(),
+                PromotionRate = i.Product.PromotionRate,
                 Quantity = i.Quantity,
                 ImageUrl = i.Product.ImageUrl
             }).ToList()

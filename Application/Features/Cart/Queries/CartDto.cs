@@ -15,7 +15,18 @@ public record CartItemDto
 {
     public Guid ProductId { get; init; }
     public string ProductName { get; init; } = string.Empty;
-    public decimal Price { get; init; }
+		/// <summary>
+    /// The original price of the product.
+    /// </summary>
+		public decimal OriginalPrice { get; init; }
+    /// <summary>
+    /// The price of the product.
+    /// </summary>
+		public decimal Price { get; init; }
+		/// <summary>
+    /// The promotion rate of the product.
+    /// </summary>
+		public decimal PromotionRate { get; init; }
     public int Quantity { get; init; }
     public string? ImageUrl { get; init; }
 }

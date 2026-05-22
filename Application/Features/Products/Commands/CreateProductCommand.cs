@@ -8,7 +8,10 @@ using System.Threading.Tasks;
 
 namespace FloraCore.Application.Features.Products.Commands;
 
-public record CreateProductCommand(Guid? Id, string Name, string Description, decimal Price, int Stock, string? ImageUrl, Guid? CategoryId) : IRequest<Guid>;
+public record CreateProductCommand(Guid? Id, string Name, string Description, decimal Price, /// <summary>
+    /// The promotion rate of the product.
+    /// </summary>
+		decimal PromotionRate, int Stock, string? ImageUrl, Guid? CategoryId) : IRequest<Guid>;
 
 public class CreateProductCommandHandler(IGenericRepository<Product, Guid> productRepository) : IRequestHandler<CreateProductCommand, Guid>
 {
@@ -22,6 +25,7 @@ public class CreateProductCommandHandler(IGenericRepository<Product, Guid> produ
             Name = request.Name,
             Description = request.Description,
             Price = request.Price,
+            PromotionRate = request.PromotionRate,
             Stock = request.Stock,
             ImageUrl = request.ImageUrl,
             CategoryId = request.CategoryId

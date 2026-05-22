@@ -7,7 +7,10 @@ using System.Threading.Tasks;
 
 namespace FloraCore.Application.Features.Products.Commands;
 
-public record UpdateProductCommand(Guid Id, string Name, string Description, decimal Price, int Stock, string? ImageUrl, Guid? CategoryId) : IRequest<Unit>;
+public record UpdateProductCommand(Guid Id, string Name, string Description, decimal Price, /// <summary>
+    /// The promotion rate of the product.
+    /// </summary>
+		decimal PromotionRate, int Stock, string? ImageUrl, Guid? CategoryId) : IRequest<Unit>;
 
 public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand, Unit>
 {
@@ -26,6 +29,7 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
         product.Name = request.Name;
         product.Description = request.Description;
         product.Price = request.Price;
+				product.PromotionRate = request.PromotionRate;
         product.Stock = request.Stock;
         product.ImageUrl = request.ImageUrl;
         product.CategoryId = request.CategoryId;
