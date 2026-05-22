@@ -25,7 +25,10 @@ builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSignalRServices();
 builder.Services.AddObservability(builder.Configuration);
-builder.Services.AddBackgroundTasks(builder.Configuration);
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddBackgroundTasks(builder.Configuration);
+}
 builder.Services.AddRedisCache(builder.Configuration)
     .AddRateLimiting(builder.Configuration)
     .AddJwtAuthentication(builder.Configuration)
@@ -78,11 +81,14 @@ if (app.Environment.IsDevelopment() || Environment.GetEnvironmentVariable("SEED_
 await DatabaseSeederExtensions.SyncTokenBlacklistAsync(app);
 
 // ========== Hangfire Recurring Jobs ==========
-var jobManager = app.Services.GetRequiredService<IRecurringJobManager>();
-jobManager.AddOrUpdate<FloraCore.Infrastructure.Services.OutboxProcessor>(
-    "outbox-processor",
-    processor => processor.ProcessMessagesAsync(),
-    Cron.Minutely());
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    var jobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+    jobManager.AddOrUpdate<FloraCore.Infrastructure.Services.OutboxProcessor>(
+        "outbox-processor",
+        processor => processor.ProcessMessagesAsync(),
+        Cron.Minutely());
+}
 
 app.Run();
 

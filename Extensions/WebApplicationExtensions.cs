@@ -81,10 +81,13 @@ public static class WebApplicationExtensions
         app.MapControllers();
 
         // Hangfire Dashboard (Restricted to authenticated Admin users)
-        app.MapHangfireDashboard("/hangfire", new DashboardOptions
+        if (!app.Environment.IsEnvironment("Testing"))
         {
-            Authorization = [new FloraCore.Infrastructure.Security.HangfireDashboardAuthFilter()]
-        });
+            app.MapHangfireDashboard("/hangfire", new DashboardOptions
+            {
+                Authorization = [new FloraCore.Infrastructure.Security.HangfireDashboardAuthFilter()]
+            });
+        }
 
         // SignalR Hubs
         app.MapHub<FloraCore.Infrastructure.Hubs.ChatHub>("/hubs/chat");
