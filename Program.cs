@@ -7,6 +7,7 @@ using Hangfire;
 using Serilog;
 using Asp.Versioning;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Clear default claim type mapping for JWT
@@ -60,6 +61,7 @@ builder.Services.AddApiVersioning(options =>
     options.GroupNameFormat = "'v'VVV";
     options.SubstituteApiVersionInUrl = true;
 });
+
 
 var app = builder.Build();
 

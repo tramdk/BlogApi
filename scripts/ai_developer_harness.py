@@ -266,6 +266,8 @@ class AIDeveloperHarness:
             self.mock_mode = False
             self.init_llm_client()
 
+        self.modified_files = set()
+
     def init_llm_client(self):
         """Khởi tạo Client LLM dựa trên Provider."""
         try:
@@ -302,7 +304,7 @@ class AIDeveloperHarness:
 
     def ask_approval(self, message: str, force_ask: bool = False) -> bool:
         """Hỏi ý kiến người dùng trước khi thực thi hành động nhạy cảm hoặc phê duyệt chốt chặn."""
-        if self.auto_approve:
+        if self.auto_approve and not force_ask:
             print(f"\n🛡️  [Harness HITL - AUTO APPROVED]: {message}")
             return True
         try:
@@ -717,6 +719,11 @@ class AIDeveloperHarness:
                 if filepath.startswith('"') and filepath.endswith('"'):
                     filepath = filepath[1:-1]
                     
+                # Chỉ khôi phục các tệp tin được chỉnh sửa/tạo bởi chính harness trong phiên chạy này
+                abs_filepath = os.path.abspath(filepath)
+                if abs_filepath not in self.modified_files:
+                    continue
+                    
                 normalized_path = filepath.lower().replace("\\", "/")
                 # Bỏ qua tệp test, docs, và plans
                 is_test_or_doc = (
@@ -926,14 +933,14 @@ class AIDeveloperHarness:
                 if action_name == "execute_command":
                     cmd = parsed_args[0] if len(parsed_args) > 0 else ""
                     # Kiểm tra xem có phải lệnh git hoặc dotnet an toàn không
-                    is_git = cmd.startswith("git ") and any(sub in cmd for sub in ["status", "add", "commit", "diff"])
+                    is_git = cmd.startswith("git ") and any(sub in cmd for sub in ["status", "add", "diff"])
                     allowed_cmds = ["dotnet build", "dotnet test", "dotnet restore", "dotnet clean"]
                     
                     if cmd not in allowed_cmds and not is_git:
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
-                            details=f"Harness nghiêm cấm chạy các lệnh tùy ý. Lệnh hợp lệ: {', '.join(allowed_cmds)} hoặc git status/diff/add/commit.",
+                            details=f"Harness nghiêm cấm chạy các lệnh tùy ý. Lệnh hợp lệ: {', '.join(allowed_cmds)} hoặc git status/diff/add.",
                         )
                     else:
                         is_git_change = "git " in cmd and any(sub in cmd for sub in ["commit", "add"])
@@ -1016,6 +1023,8 @@ class AIDeveloperHarness:
                         if self.ask_approval(f"Đồng ý cho Agent ghi file: '{filepath}'?"):
                             res = write_source_file(filepath, content)
                             status = "SUCCESS" if res == "Ghi file thành công." else "ERROR"
+                            if status == "SUCCESS":
+                                self.modified_files.add(os.path.abspath(filepath))
                             observation = format_observation(
                                 status=status,
                                 summary=res,
@@ -1107,7 +1116,7 @@ class AIDeveloperHarness:
             "2. `write_source(file_path, content)`: Ghi hoặc cập nhật file nguồn. Lưu ý: chuỗi `content` phải được bọc trong nháy kép hoặc nháy đơn. Nếu nội dung có nhiều dòng hoặc chứa dấu nháy, hãy chú ý escape (thêm dấu gạch chéo ngược `\\\\` trước các dấu nháy trùng loại ở trong nội dung).\n"
             "   Ví dụ: ACTION: write_source(\"FloraCore.Tests/MyTest.cs\", \"using Xunit;\\\\n...\")\n"
             "3. `execute_command(command)`: Thực thi một lệnh hệ thống.\n"
-            "   Các lệnh được phép chạy CHỈ BAO GỒM: 'dotnet build', 'dotnet test', 'dotnet restore', 'dotnet clean', 'git status', 'git diff', 'git add', 'git commit'. Tuyệt đối không được chạy bất kỳ lệnh nào khác.\n"
+            "   Các lệnh được phép chạy CHỈ BAO GỒM: 'dotnet build', 'dotnet test', 'dotnet restore', 'dotnet clean', 'git status', 'git diff', 'git add'. Tuyệt đối không được chạy bất kỳ lệnh nào khác.\n"
             "   Ví dụ: ACTION: execute_command(\"dotnet test\")\n"
             "4. `finish_task(summary)`: Hoàn thành nhiệm vụ được giao và báo cáo tóm tắt kết quả cho Kỹ sư / Evaluator.\n"
             "   Ví dụ: ACTION: finish_task(\"Đã viết xong các unit tests và kiểm tra build thành công.\")\n\n"

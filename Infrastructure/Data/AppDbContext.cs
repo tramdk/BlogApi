@@ -23,6 +23,7 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<FileMetadata> FileMetadata => Set<FileMetadata>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<WebsiteInfo> WebsiteInfos => Set<WebsiteInfo>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
