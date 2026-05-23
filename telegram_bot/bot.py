@@ -13,6 +13,7 @@ import asyncio
 import logging
 import os
 import queue
+import subprocess
 import sys
 import threading
 import traceback
@@ -240,16 +241,91 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 **Harness Bot**\n\n"
+        "**Pipeline:**\n"
         "`/run [flags] <nhiệm vụ>` — Chạy pipeline\n"
         "  `--mock`          chế độ giả lập\n"
         "  `--auto-approve`  tự động phê duyệt\n"
-        "`/cancel` — Hủy pipeline đang chạy\n"
-        "`/status` — Kiểm tra trạng thái\n"
-        "`/help` — Hướng dẫn\n\n"
+        "`/cancel` — Hủy pipeline\n"
+        "`/status` — Trạng thái hiện tại\n\n"
+        "**Git:**\n"
+        "`/git <lệnh>` — Chạy lệnh git\n"
+        "  Lệnh read-only (status/diff/log) chạy ngay.\n"
+        "  Lệnh ghi (commit/push/add) cần xác nhận.\n\n"
         "Ví dụ:\n"
         "`/run --mock Thêm entity PostCategory`\n"
-        "`/run --auto-approve Fix bug build`"
+        "`/git status`\n"
+        "`/git log --oneline -5`"
     )
+
+
+async def cmd_git(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "Cách dùng: `/git <lệnh>`\n"
+            "Ví dụ:\n"
+            "`/git status`\n"
+            "`/git diff`\n"
+            "`/git add .`\n"
+            "`/git commit -m \"fix: sửa lỗi\"`\n"
+            "`/git push`\n"
+            "`/git log --oneline -5`\n"
+            "`/git pull`"
+        )
+        return
+
+    cmd_parts = " ".join(context.args)
+    try:
+        result = subprocess.run(
+            f"git {cmd_parts}",
+            shell=True,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=PROJECT_ROOT,
+            timeout=60,
+        )
+        output = result.stdout or ""
+        if result.stderr:
+            output += "\n--- stderr ---\n" + result.stderr
+        if not output.strip():
+            output = "(không có output)"
+        if len(output) > 3900:
+            output = output[:3900] + "\n...(truncated)"
+        await update.message.reply_text(
+            f"```\n$ git {cmd_parts}\n{output}\n```",
+        )
+    except subprocess.TimeoutExpired:
+        await update.message.reply_text("⏰ Lệnh git bị timeout (60s).")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Lỗi: `{e}`")
+    try:
+        result = subprocess.run(
+            f"git {cmd_parts}",
+            shell=True,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=PROJECT_ROOT,
+            timeout=60,
+        )
+        output = result.stdout or ""
+        if result.stderr:
+            output += "\n--- stderr ---\n" + result.stderr
+
+        if not output.strip():
+            output = "(không có output)"
+
+        # Truncate nếu quá dài
+        if len(output) > 3900:
+            output = output[:3900] + "\n...(truncated)"
+
+        await update.message.reply_text(
+            f"```\n$ git {cmd_parts}\n{output[:3900]}\n```",
+        )
+    except subprocess.TimeoutExpired:
+        await update.message.reply_text("⏰ Lệnh git bị timeout (60s).")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Lỗi: `{e}`")
 
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -292,6 +368,7 @@ def main():
     app.add_handler(CommandHandler("run", cmd_run))
     app.add_handler(CommandHandler("cancel", cmd_cancel))
     app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("git", cmd_git))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CallbackQueryHandler(callback_handler))
 
