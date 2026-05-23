@@ -7,16 +7,11 @@ namespace FloraCore.Infrastructure.Data;
 /// <summary>
 /// Unit of Work implementation using Entity Framework Core.
 /// </summary>
-public class UnitOfWork : IUnitOfWork
+public class UnitOfWork(AppDbContext context) : IUnitOfWork
 {
-    private readonly AppDbContext _context;
+    private readonly AppDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
     private IDbContextTransaction? _transaction;
     private bool _disposed;
-
-    public UnitOfWork(AppDbContext context)
-    {
-        _context = context;
-    }
 
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {

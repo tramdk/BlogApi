@@ -28,14 +28,17 @@ namespace FloraCore.Tests.Application.WebsiteInfoTests
                 "Tax-123456",
                 "Test Location"
             );
-            Guid expectedId = Guid.NewGuid();
-            mockRepo.Setup(repo => repo.AddAsync(It.IsAny<WebsiteInfo>())).ReturnsAsync(expectedId);
+            WebsiteInfo? capturedEntity = null;
+            mockRepo.Setup(repo => repo.AddAsync(It.IsAny<WebsiteInfo>()))
+                .Callback<WebsiteInfo>(entity => capturedEntity = entity)
+                .Returns(Task.CompletedTask);
 
             // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
             // Assert
-            result.Should().Be(expectedId);
+            capturedEntity.Should().NotBeNull();
+            result.Should().Be(capturedEntity!.Id);
             mockRepo.Verify(repo => repo.AddAsync(It.IsAny<WebsiteInfo>()), Times.Once);
         }
 

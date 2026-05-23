@@ -64,10 +64,21 @@ public interface IGenericRepository<TEntity, TKey> where TEntity : class
     Task DeleteAsync(TEntity entity);
 
     /// <summary>
+    /// Delete entity by its ID and immediately persist to database.
+    /// </summary>
+    Task DeleteAsync(TKey id);
+
+    /// <summary>
     /// Stage a deletion WITHOUT calling SaveChanges.
     /// Use with IUnitOfWork for atomic multi-step operations.
     /// </summary>
     void StageDelete(TEntity entity);
+
+    /// <summary>
+    /// Stage a deletion of entity by its ID WITHOUT calling SaveChanges.
+    /// Use with IUnitOfWork for atomic multi-step operations.
+    /// </summary>
+    void StageDelete(TKey id);
     
     /// <summary>
     /// Get queryable for custom queries
