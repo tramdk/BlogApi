@@ -1,51 +1,49 @@
 using Xunit;
 using FloraCore.Application.Features.WebsiteInfo.Queries;
 using FloraCore.Application.Interfaces;
-using FloraCore.Domain.Entities;
 using Moq;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
-using MediatR;
+using FloraCore.Domain.Entities;
 
-namespace FloraCore.Tests.Application.WebsiteInfoTests
+namespace FloraCore.Tests.Application.WebsiteInfo
 {
     public class GetWebsiteInfoQueryHandlerTests
     {
         [Fact]
-        public async Task Handle_ValidQuery_ReturnsWebsiteInfo()
+        public async Task Handle_ExistingId_ReturnsWebsiteInfo()
         {
             // Arrange
-            var mockRepo = new Mock<IWebsiteInfoRepository>();
-            var handler = new GetWebsiteInfoQueryHandler(mockRepo.Object);
-            var websiteInfoId = Guid.NewGuid();
-            var expectedWebsiteInfo = new WebsiteInfo { Id = websiteInfoId, Name = "Test Name" };
-            mockRepo.Setup(repo => repo.GetByIdAsync(websiteInfoId)).ReturnsAsync(expectedWebsiteInfo);
+            var mockRepository = new Mock<IWebsiteInfoRepository>();
+            var handler = new GetWebsiteInfoQueryHandler(mockRepository.Object);
+            var expectedWebsiteInfo = new FloraCore.Domain.Entities.WebsiteInfo { Id = Guid.NewGuid(), Name = "Test Name" };
+            mockRepository.Setup(repo => repo.GetByIdAsync(expectedWebsiteInfo.Id)).ReturnsAsync(expectedWebsiteInfo);
 
             // Act
-            var result = await handler.Handle(new GetWebsiteInfoQuery(websiteInfoId), CancellationToken.None);
+            var result = await handler.Handle(new GetWebsiteInfoQuery(expectedWebsiteInfo.Id), CancellationToken.None);
 
             // Assert
             result.Should().BeEquivalentTo(expectedWebsiteInfo);
-            mockRepo.Verify(repo => repo.GetByIdAsync(websiteInfoId), Times.Once);
+            mockRepository.Verify(repo => repo.GetByIdAsync(expectedWebsiteInfo.Id), Times.Once);
         }
 
         [Fact]
-        public async Task Handle_InvalidQuery_ReturnsNull()
+        public async Task Handle_NonExistingId_ReturnsNull()
         {
             // Arrange
-            var mockRepo = new Mock<IWebsiteInfoRepository>();
-            var handler = new GetWebsiteInfoQueryHandler(mockRepo.Object);
-            var websiteInfoId = Guid.NewGuid();
-            mockRepo.Setup(repo => repo.GetByIdAsync(websiteInfoId)).ReturnsAsync((WebsiteInfo)null);
+            var mockRepository = new Mock<IWebsiteInfoRepository>();
+            var handler = new GetWebsiteInfoQueryHandler(mockRepository.Object);
+            Guid nonExistingId = Guid.NewGuid();
+            mockRepository.Setup(repo => repo.GetByIdAsync(nonExistingId)).ReturnsAsync((FloraCore.Domain.Entities.WebsiteInfo)null);
 
             // Act
-            var result = await handler.Handle(new GetWebsiteInfoQuery(websiteInfoId), CancellationToken.None);
+            var result = await handler.Handle(new GetWebsiteInfoQuery(nonExistingId), CancellationToken.None);
 
             // Assert
             result.Should().BeNull();
-            mockRepo.Verify(repo => repo.GetByIdAsync(websiteInfoId), Times.Once);
+            mockRepository.Verify(repo => repo.GetByIdAsync(nonExistingId), Times.Once);
         }
     }
 }

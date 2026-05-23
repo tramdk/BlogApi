@@ -1,16 +1,15 @@
 using Xunit;
 using FloraCore.Application.Features.WebsiteInfo.Queries;
 using FloraCore.Application.Interfaces;
-using FloraCore.Domain.Entities;
 using Moq;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
-using MediatR;
+using FloraCore.Domain.Entities;
 
-namespace FloraCore.Tests.Application.WebsiteInfoTests
+namespace FloraCore.Tests.Application.WebsiteInfo
 {
     public class GetAllWebsiteInfoQueryHandlerTests
     {
@@ -20,12 +19,12 @@ namespace FloraCore.Tests.Application.WebsiteInfoTests
             // Arrange
             var mockRepo = new Mock<IWebsiteInfoRepository>();
             var handler = new GetAllWebsiteInfoQueryHandler(mockRepo.Object);
-            var expectedWebsiteInfos = new List<WebsiteInfo>
+            var expectedWebsiteInfos = new List<FloraCore.Domain.Entities.WebsiteInfo>
             {
-                new WebsiteInfo { Id = Guid.NewGuid(), Name = "Test Name 1" },
-                new WebsiteInfo { Id = Guid.NewGuid(), Name = "Test Name 2" }
+                new FloraCore.Domain.Entities.WebsiteInfo { Id = Guid.NewGuid(), Name = "Test Name 1" },
+                new FloraCore.Domain.Entities.WebsiteInfo { Id = Guid.NewGuid(), Name = "Test Name 2" }
             };
-            mockRepo.Setup(repo => repo.GetAllAsync()).ReturnsAsync(expectedWebsiteInfos);
+            mockRepo.Setup(repo => repo.GetAllAsync()).ReturnsAsync(expectedWebsiteInfos as IEnumerable<FloraCore.Domain.Entities.WebsiteInfo>);
 
             // Act
             var result = await handler.Handle(new GetAllWebsiteInfoQuery(), CancellationToken.None);

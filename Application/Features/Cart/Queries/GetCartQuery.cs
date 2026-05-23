@@ -24,7 +24,7 @@ public class GetCartQueryHandler : IRequestHandler<GetCartQuery, CartDto>
 
     public async Task<CartDto> Handle(GetCartQuery request, CancellationToken cancellationToken)
     {
-        var userId = _currentUserService.UserId ?? throw new Exception("User not authenticated");
+        var userId = _currentUserService.UserId ?? throw new UnauthorizedAccessException("User not authenticated");
 
         var cart = await _cartRepository.GetQueryable()
             .Include(c => c.Items)

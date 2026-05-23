@@ -1,60 +1,59 @@
-using Xunit;
 using FloraCore.Application.Features.WebsiteInfo.Commands;
 using FloraCore.Application.Interfaces;
-using FloraCore.Domain.Entities;
 using Moq;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Xunit;
 using FluentAssertions;
-using MediatR;
+using FloraCore.Domain.Entities;
 
-namespace FloraCore.Tests.Application.WebsiteInfoTests
+namespace FloraCore.Tests.Application.WebsiteInfo
 {
     public class CreateWebsiteInfoCommandHandlerTests
     {
         [Fact]
-        public async Task Handle_ValidCommand_CreatesWebsiteInfo()
+        public async Task Handle_ValidCommand_ReturnsWebsiteInfoId()
         {
             // Arrange
-            var mockRepo = new Mock<IWebsiteInfoRepository>();
-            var handler = new CreateWebsiteInfoCommandHandler(mockRepo.Object);
+            var mockRepository = new Mock<IWebsiteInfoRepository>();
+            var handler = new CreateWebsiteInfoCommandHandler(mockRepository.Object);
             var command = new CreateWebsiteInfoCommand(
                 "Test Name",
                 "Test Slogan",
                 "Test Introduction",
                 "test@example.com",
                 "1234567890",
-                "Tax-123456",
+                "123456789",
                 "Test Location"
             );
-            WebsiteInfo? capturedEntity = null;
-            mockRepo.Setup(repo => repo.AddAsync(It.IsAny<WebsiteInfo>()))
-                .Callback<WebsiteInfo>(entity => capturedEntity = entity)
-                .Returns(Task.CompletedTask);
+
+            Guid expectedId = Guid.NewGuid();
+            mockRepository.Setup(repo => repo.AddAsync(It.IsAny<FloraCore.Domain.Entities.WebsiteInfo>()))
+                .Returns(Task.CompletedTask)
+                .Callback<FloraCore.Domain.Entities.WebsiteInfo>(websiteInfo => websiteInfo.Id = expectedId);
 
             // Act
             var result = await handler.Handle(command, CancellationToken.None);
 
             // Assert
-            capturedEntity.Should().NotBeNull();
-            result.Should().Be(capturedEntity!.Id);
-            mockRepo.Verify(repo => repo.AddAsync(It.IsAny<WebsiteInfo>()), Times.Once);
+            result.Should().Be(expectedId);
+            mockRepository.Verify(repo => repo.AddAsync(It.IsAny<FloraCore.Domain.Entities.WebsiteInfo>()), Times.Once);
         }
 
         [Fact]
-        public async Task Handle_InvalidCommand_ThrowsException()
+        public async Task Handle_InvalidCommand_ThrowsArgumentException()
         {
             // Arrange
-            var mockRepo = new Mock<IWebsiteInfoRepository>();
-            var handler = new CreateWebsiteInfoCommandHandler(mockRepo.Object);
+            var mockRepository = new Mock<IWebsiteInfoRepository>();
+            var handler = new CreateWebsiteInfoCommandHandler(mockRepository.Object);
             var command = new CreateWebsiteInfoCommand(
-                null,
+                "",
                 "Test Slogan",
                 "Test Introduction",
                 "test@example.com",
                 "1234567890",
-                "Tax-123456",
+                "123456789",
                 "Test Location"
             );
 
@@ -62,8 +61,9 @@ namespace FloraCore.Tests.Application.WebsiteInfoTests
             Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
 
             // Assert
-            await act.Should().ThrowAsync<ArgumentException>();
-            mockRepo.Verify(repo => repo.AddAsync(It.IsAny<WebsiteInfo>()), Times.Never);
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("Name cannot be null or empty. (Parameter 'Name')");
+            mockRepository.Verify(repo => repo.AddAsync(It.IsAny<FloraCore.Domain.Entities.WebsiteInfo>()), Times.Never);
         }
     }
 }

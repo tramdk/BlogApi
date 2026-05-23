@@ -151,7 +151,7 @@ public class GetCartQueryHandlerTests : IDisposable
         var act = () => handler.Handle(query, CancellationToken.None);
 
         // Assert
-        await act.Should().ThrowAsync<Exception>().WithMessage("User not authenticated");
+        await act.Should().ThrowAsync<UnauthorizedAccessException>().WithMessage("User not authenticated");
     }
 
     public void Dispose()

@@ -15,7 +15,7 @@ public class CreateWebsiteInfoCommandHandler(IWebsiteInfoRepository repository) 
     {
         if (string.IsNullOrEmpty(request.Name))
         {
-            throw new ArgumentException("Name cannot be null or empty.");
+            throw new ArgumentException("Name cannot be null or empty.", nameof(request.Name));
         }
 
         var websiteInfo = new Domain.Entities.WebsiteInfo

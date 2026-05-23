@@ -900,6 +900,26 @@ class AIDeveloperHarness:
             
         return contents
 
+    def run_policy_validation(self) -> tuple[int, str]:
+        """Chạy script kiểm tra coding policy tĩnh."""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.dirname(script_dir)
+        try:
+            cmd = 'powershell.exe -ExecutionPolicy Bypass -Command "./scripts/final-check.ps1 validate-policy"'
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                cwd=root_dir,
+                capture_output=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=60
+            )
+            output = (result.stdout or "") + "\n" + (result.stderr or "")
+            return result.returncode, output
+        except Exception as e:
+            return -1, f"Lỗi thực thi validate-policy: {str(e)}"
+
     def condense_history_tokens(self, history: str) -> str:
         """Phân tích lịch sử hội thoại dạng chuỗi và nén các lượt cũ để tiết kiệm token."""
         # Phân tách lịch sử thành các lượt dựa trên từ khóa Lượt X:
@@ -1131,6 +1151,8 @@ class AIDeveloperHarness:
         self.current_role = role
         self.iteration_count = 0
         self.action_history = []
+        self.write_history = {}
+        self.test_failure_history = []
         context_history = initial_context
         
         while self.iteration_count < self.max_iterations:
@@ -1190,16 +1212,6 @@ class AIDeveloperHarness:
             # Theo dõi lịch sử hành động để chống lặp vô hạn (Loop Detection)
             current_action = (action_name, action_args.strip())
             self.action_history.append(current_action)
-            
-            loop_warning = ""
-            if len(self.action_history) >= 3 and self.action_history[-1] == self.action_history[-2] == self.action_history[-3]:
-                loop_warning = (
-                    "\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Bạn đang thực hiện chính xác cùng một thao tác liên tục và nhận cùng kết quả/lỗi.\n"
-                    "Hãy đổi chiến thuật ngay! Bạn KHÔNG được lặp lại hành động này nữa. Hãy làm một trong các việc sau:\n"
-                    "  1. Sử dụng 'read_source' để đọc lại file bị lỗi để xem cấu trúc và nội dung thực tế trước khi sửa.\n"
-                    "  2. Đọc các file liên quan khác để tìm giải pháp hoặc namespace đúng.\n"
-                    "  3. Thực hiện thay đổi khác (ví dụ: tạo stub class trước) thay vì lặp lại thao tác lỗi."
-                )
 
             # Khớp ngoặc tròn của hàm chính xác bằng cách loại bỏ phần dư thừa ở cuối nếu có
             parsed_args = None
@@ -1232,6 +1244,34 @@ class AIDeveloperHarness:
                         
             if parsed_args is None:
                 parsed_args = safe_parse_action_arguments(action_args)
+
+            loop_warning = ""
+            # 1. Phát hiện vòng lặp hành động trùng lặp liên tục
+            if len(self.action_history) >= 3 and self.action_history[-1] == self.action_history[-2] == self.action_history[-3]:
+                loop_warning = (
+                    "\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Bạn đang thực hiện chính xác cùng một thao tác liên tục và nhận cùng kết quả/lỗi.\n"
+                    "Hãy đổi chiến thuật ngay! Bạn KHÔNG được lặp lại hành động này nữa. Hãy làm một trong các việc sau:\n"
+                    "  1. Sử dụng 'read_source' để đọc lại file bị lỗi để xem cấu trúc và nội dung thực tế trước khi sửa.\n"
+                    "  2. Đọc các file liên quan khác để tìm giải pháp hoặc namespace đúng.\n"
+                    "  3. Thực hiện thay đổi khác (ví dụ: tạo stub class trước) thay vì lặp lại thao tác lỗi."
+                )
+
+            # 2. Phát hiện vòng lặp ghi đè trùng lặp cùng nội dung vào cùng một file (Alternating Loop 1)
+            if action_name == "write_source" and parsed_args and len(parsed_args) >= 2:
+                filepath = parsed_args[0]
+                content = parsed_args[1]
+                content_hash = hash(content)
+                if filepath not in self.write_history:
+                    self.write_history[filepath] = []
+                self.write_history[filepath].append(content_hash)
+                
+                if self.write_history[filepath].count(content_hash) >= 2:
+                    loop_warning = (
+                        f"\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Bạn đang ghi đè chính xác cùng một nội dung vào tệp '{filepath}' lần thứ {self.write_history[filepath].count(content_hash)}.\n"
+                        "Mã nguồn này đã được áp dụng trước đó và không giúp vượt qua kiểm thử. Bạn KHÔNG được tiếp tục ghi đè nội dung này.\n"
+                        "Hãy đổi chiến thuật: đọc kỹ stack trace lỗi, kiểm tra lại Mock setups, hoặc đọc các file kiểm thử tương ứng để hiểu logic."
+                    )
+            
             observation = ""
             
             # 2. Thực thi Hành động tương ứng
@@ -1286,9 +1326,27 @@ class AIDeveloperHarness:
                                     if test_errs:
                                         details += "\n\n--- FAILED TEST CASES ---\n" + "\n".join(test_errs)
                                         
+                                        # Theo dõi lịch sử lỗi test để chống lặp
+                                        sorted_errs = sorted(test_errs)
+                                        self.test_failure_history.append(sorted_errs)
+                                        if len(self.test_failure_history) >= 3 and self.test_failure_history[-1] == self.test_failure_history[-2] == self.test_failure_history[-3]:
+                                            loop_warning_test = (
+                                                "\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Danh sách test case thất bại hoàn toàn KHÔNG THAY ĐỔI sau 3 lần chạy test liên tiếp.\n"
+                                                "Điều này có nghĩa là các chỉnh sửa mã nguồn gần đây của bạn không có bất kỳ tác dụng nào đối với các lỗi kiểm thử hiện tại.\n"
+                                                "Hãy thay đổi chiến thuật: đọc kỹ stack trace lỗi, kiểm tra lại Mock setups, hoặc đọc các file kiểm thử tương ứng để hiểu logic."
+                                            )
+                                            details = loop_warning_test + "\n\n" + details
+                                        
+                            # Tích hợp kiểm tra tĩnh sau khi chạy build/test thành công
+                            if ("build" in cmd or "test" in cmd) and code == 0:
+                                val_code, val_out = self.run_policy_validation()
+                                if val_code != 0:
+                                    status = "ERROR"
+                                    details += "\n\n🚨 CÁC LỖI VI PHẠM CODING POLICY (Tĩnh):\n" + val_out
+
                             observation = format_observation(
                                 status=status,
-                                summary=f"Chạy lệnh '{cmd}' " + ("thành công." if code == 0 else "thất bại."),
+                                summary=f"Chạy lệnh '{cmd}' " + ("thành công." if status == "SUCCESS" else "thất bại."),
                                 details=details
                             )
                         else:
@@ -1430,6 +1488,8 @@ class AIDeveloperHarness:
             if action_name == "finish_task" and not success:
                 self.max_iterations = max(self.max_iterations, self.iteration_count + 3)
                 
+            self.iteration_count += 1
+                
         print(f"⚠️ [Harness Alert]: Agent {role} đạt giới hạn lặp tối đa.")
         return ""
 
@@ -1557,11 +1617,31 @@ class AIDeveloperHarness:
             "Nhiệm vụ của bạn là hiện thực hóa logic nghiệp vụ trong các lớp Domain, Application, Infrastructure, Controllers dựa trên Bản kế hoạch (Execution Plan) và vượt qua toàn bộ các test cases đã được viết.\n"
             "Hãy tuân thủ nghiêm ngặt chính sách lập trình (CODING_POLICY.md).\n"
             "🚨 QUY TẮC PHÁT TRIỂN QUAN TRỌNG:\n"
+            "- BẮT BUỘC sử dụng C# 12+ Primary Constructors cho TẤT CẢ các lớp có Dependency Injection bao gồm Repositories, Handlers, Controllers, và DbContext. KHÔNG ĐƯỢC phép sử dụng cấu trúc constructor truyền thống.\n"
+            "- BẮT BUỘC thực hiện kiểm tra null ngay đầu constructor cho mọi tham số được inject bằng `ArgumentNullException.ThrowIfNull(dependency)` hoặc gán qua private readonly field kèm `?? throw new ArgumentNullException(...)`.\n"
             "- Hãy tham chiếu trực tiếp đến các file code mẫu có sẵn để bắt chước cấu trúc thiết kế chuẩn của project:\n"
             "  * Xem [GenericRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/GenericRepository.cs) làm repository cơ sở.\n"
             "  * Xem [ProductRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/ProductRepository.cs) và [WebsiteInfoRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/WebsiteInfoRepository.cs) làm mẫu kế thừa GenericRepository, khai báo Primary Constructors C# 12+ kèm ThrowIfNull check.\n"
             "  * Xem [UnitOfWork.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Data/UnitOfWork.cs) làm mẫu cấu trúc UoW.\n"
             "  * Xem các Handlers trong [Application/Features/WebsiteInfo/Commands](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Application/Features/WebsiteInfo/Commands/) làm mẫu viết Command/CommandHandler trong cùng một file kèm Primary Constructor.\n"
+            "  * Mẫu Controller sử dụng Primary Constructor C# 12+:\n"
+            "    ```csharp\n"
+            "    [ApiController]\n"
+            "    [Route(\"api/[controller]\")]\n"
+            "    public class OrdersController(IMediator mediator) : ControllerBase\n"
+            "    {\n"
+            "        private readonly IMediator _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));\n"
+            "        // ...\n"
+            "    }\n"
+            "    ```\n"
+            "  * Mẫu DbContext sử dụng Primary Constructor C# 12+:\n"
+            "    ```csharp\n"
+            "    public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>(options)\n"
+            "    {\n"
+            "        private readonly DbContextOptions<AppDbContext> _options = options ?? throw new ArgumentNullException(nameof(options));\n"
+            "        // ...\n"
+            "    }\n"
+            "    ```\n"
             "Bạn được phép đọc tất cả các file và ghi vào các file production code. Tuyệt đối KHÔNG sửa đổi file cấu hình hệ thống (.env) hoặc file harness (`ai_developer_harness.py`).\n"
             "Thường xuyên chạy `dotnet build` và `dotnet test` để kiểm tra tiến trình.\n"
             "Sau khi vượt qua toàn bộ tests và không còn lỗi linter, hãy gọi `finish_task('<báo cáo chi tiết các file đã sửa đổi>')` để gửi cho Evaluator.\n\n"
@@ -1672,6 +1752,11 @@ class AIDeveloperHarness:
             if code != 0:
                 errs = extract_compiler_errors(out)
                 return False, "Không thể build hệ thống sau khi code. Chi tiết lỗi:\n" + "\n".join(errs)
+                
+            print("🧹 Kiểm tra Coding Policy tĩnh...")
+            val_code, val_out = self.run_policy_validation()
+            if val_code != 0:
+                return False, "Phát hiện lỗi vi phạm Coding Policy (Tĩnh) sau khi build thành công. Bạn phải sửa đổi các lỗi này:\n" + val_out
                 
             print("⚙️ Chạy tests hệ thống...")
             t_code, t_out = run_dotnet_command("dotnet test")

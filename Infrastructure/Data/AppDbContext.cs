@@ -8,16 +8,9 @@ namespace FloraCore.Infrastructure.Data;
 /// <summary>
 /// Application database context.
 /// </summary>
-public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
+public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>(options)
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AppDbContext"/> class.
-    /// </summary>
-    /// <param name="options">The options for configuring the context.</param>
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
-    {
-        ArgumentNullException.ThrowIfNull(options, nameof(options));
-    }
+    private readonly DbContextOptions<AppDbContext> _options = options ?? throw new ArgumentNullException(nameof(options));
 
     /// <summary>
     /// Gets or sets the posts.
@@ -84,10 +77,20 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
     /// </summary>
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
-        /// <summary>
+    /// <summary>
     /// Gets or sets the website info.
     /// </summary>
     public DbSet<WebsiteInfo> WebsiteInfos => Set<WebsiteInfo>();
+
+    /// <summary>
+    /// Gets or sets the orders.
+    /// </summary>
+    public DbSet<Order> Orders => Set<Order>();
+
+    /// <summary>
+    /// Gets or sets the order items.
+    /// </summary>
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
@@ -186,6 +189,26 @@ public class AppDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>
             entity.HasOne(n => n.User)
                 .WithMany()
                 .HasForeignKey(n => n.UserId);
+        });
+
+        builder.Entity<Order>(entity =>
+        {
+            entity.HasOne(o => o.User)
+                .WithMany()
+                .HasForeignKey(o => o.UserId);
+
+            entity.OwnsOne(o => o.ShippingAddress);
+        });
+
+        builder.Entity<OrderItem>(entity =>
+        {
+            entity.HasOne(oi => oi.Order)
+                .WithMany(o => o.OrderItems)
+                .HasForeignKey(oi => oi.OrderId);
+
+            entity.HasOne(oi => oi.Product)
+                .WithMany()
+                .HasForeignKey(oi => oi.ProductId);
         });
     }
 }

@@ -118,13 +118,13 @@ public class GenericRepository<TEntity, TKey>(AppDbContext context) : IGenericRe
     }
 
     /// <inheritdoc />
-    public IQueryable<TEntity> GetQueryable()
+    public virtual IQueryable<TEntity> GetQueryable()
     {
         return _dbSet.AsQueryable();
     }
 
     /// <inheritdoc />
-    public IQueryable<TEntity> GetQueryable(QueryOptions<TEntity> options)
+    public virtual IQueryable<TEntity> GetQueryable(QueryOptions<TEntity> options)
     {
         return ApplyQueryOptions(_dbSet.AsQueryable(), options);
     }

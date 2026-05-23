@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IWebsiteInfoRepository, WebsiteInfoRepository>();
+        services.AddScoped<IOrderRepository, OrderRepository>();
 
         // Register IPostQueryDialect strategy dynamically based on DatabaseProvider
         if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))

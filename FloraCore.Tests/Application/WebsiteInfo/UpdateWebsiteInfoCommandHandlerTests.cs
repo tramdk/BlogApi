@@ -1,70 +1,73 @@
-using Xunit;
 using FloraCore.Application.Features.WebsiteInfo.Commands;
 using FloraCore.Application.Interfaces;
-using FloraCore.Domain.Entities;
 using Moq;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Xunit;
 using FluentAssertions;
-using MediatR;
+using FloraCore.Domain.Entities;
 
-namespace FloraCore.Tests.Application.WebsiteInfoTests
+namespace FloraCore.Tests.Application.WebsiteInfo
 {
     public class UpdateWebsiteInfoCommandHandlerTests
     {
         [Fact]
-        public async Task Handle_ValidCommand_UpdatesWebsiteInfo()
+        public async Task Handle_ExistingId_UpdatesWebsiteInfo()
         {
             // Arrange
-            var mockRepo = new Mock<IWebsiteInfoRepository>();
-            var handler = new UpdateWebsiteInfoCommandHandler(mockRepo.Object);
+            var mockRepository = new Mock<IWebsiteInfoRepository>();
+            var handler = new UpdateWebsiteInfoCommandHandler(mockRepository.Object);
+            var existingWebsiteInfo = new FloraCore.Domain.Entities.WebsiteInfo { Id = Guid.NewGuid(), Name = "Old Name" };
+            mockRepository.Setup(repo => repo.GetByIdAsync(existingWebsiteInfo.Id)).ReturnsAsync(existingWebsiteInfo);
+            mockRepository.Setup(repo => repo.UpdateAsync(It.IsAny<FloraCore.Domain.Entities.WebsiteInfo>())).Returns(Task.CompletedTask);
+
             var command = new UpdateWebsiteInfoCommand(
-                Guid.NewGuid(),
-                "Test Name",
-                "Test Slogan",
-                "Test Introduction",
-                "test@example.com",
-                "1234567890",
-                "Tax-123456",
-                "Test Location"
+                existingWebsiteInfo.Id,
+                "New Name",
+                "New Slogan",
+                "new@example.com",
+                "0987654321",
+                "987654321",
+                "New Location",
+                "New Location"
             );
-            mockRepo.Setup(repo => repo.GetByIdAsync(command.Id)).ReturnsAsync(new WebsiteInfo { Id = command.Id });
-            mockRepo.Setup(repo => repo.UpdateAsync(It.IsAny<WebsiteInfo>())).Returns(Task.CompletedTask);
 
             // Act
             await handler.Handle(command, CancellationToken.None);
 
             // Assert
-            mockRepo.Verify(repo => repo.GetByIdAsync(command.Id), Times.Once);
-            mockRepo.Verify(repo => repo.UpdateAsync(It.IsAny<WebsiteInfo>()), Times.Once);
+            mockRepository.Verify(repo => repo.GetByIdAsync(existingWebsiteInfo.Id), Times.Once);
+            mockRepository.Verify(repo => repo.UpdateAsync(It.Is<FloraCore.Domain.Entities.WebsiteInfo>(w => w.Name == "New Name")), Times.Once);
         }
 
         [Fact]
-        public async Task Handle_InvalidCommand_ThrowsException()
+        public async Task Handle_NonExistingId_ThrowsArgumentException()
         {
             // Arrange
-            var mockRepo = new Mock<IWebsiteInfoRepository>();
-            var handler = new UpdateWebsiteInfoCommandHandler(mockRepo.Object);
+            var mockRepository = new Mock<IWebsiteInfoRepository>();
+            var handler = new UpdateWebsiteInfoCommandHandler(mockRepository.Object);
+            Guid nonExistingId = Guid.NewGuid();
+            mockRepository.Setup(repo => repo.GetByIdAsync(nonExistingId)).ReturnsAsync((FloraCore.Domain.Entities.WebsiteInfo)null);
+
             var command = new UpdateWebsiteInfoCommand(
-                Guid.NewGuid(),
-                "Test Name",
-                "Test Slogan",
-                "Test Introduction",
-                "test@example.com",
-                "1234567890",
-                "Tax-123456",
-                "Test Location"
+                nonExistingId,
+                "New Name",
+                "New Slogan",
+                "new@example.com",
+                "0987654321",
+                "987654321",
+                "New Location",
+                "New Location"
             );
-            mockRepo.Setup(repo => repo.GetByIdAsync(command.Id)).ReturnsAsync((WebsiteInfo)null);
 
             // Act
             Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
 
             // Assert
-            await act.Should().ThrowAsync<ArgumentException>();
-            mockRepo.Verify(repo => repo.GetByIdAsync(command.Id), Times.Once);
-            mockRepo.Verify(repo => repo.UpdateAsync(It.IsAny<WebsiteInfo>()), Times.Never);
+            await act.Should().ThrowAsync<ArgumentException>().WithMessage("WebsiteInfo not found.");
+            mockRepository.Verify(repo => repo.GetByIdAsync(nonExistingId), Times.Once);
+            mockRepository.Verify(repo => repo.UpdateAsync(It.IsAny<FloraCore.Domain.Entities.WebsiteInfo>()), Times.Never);
         }
     }
 }
