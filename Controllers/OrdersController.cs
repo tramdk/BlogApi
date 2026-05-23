@@ -1,3 +1,4 @@
+
 using FloraCore.Application.Features.Orders.Commands;
 using FloraCore.Application.Features.Orders.Queries;
 using MediatR;
@@ -5,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using FloraCore.Application.Common.Constants; // ThÃªm dÃ²ng nÃ y
 
 namespace FloraCore.Controllers;
 
@@ -65,5 +67,22 @@ public class OrdersController(IMediator mediator) : ControllerBase
     {
         var result = await _mediator.Send(new RemoveOrderItemCommand(orderId, orderItemId));
         return result ? NoContent() : NotFound();
+    }
+
+    /// <summary>
+    /// Gets order statistics for administrators.
+    /// </summary>
+    /// <param name="startDate">Optional start date to filter orders.</param>
+    /// <param name="endDate">Optional end date to filter orders.</param>
+    /// <returns>Order statistics.</returns>
+    [HttpGet("statistics")]
+    [Authorize(Roles = RoleConstants.Admin)] // Only Admin can access
+    public async Task<IActionResult> GetOrderStatistics(
+        [FromQuery] DateTime? startDate, 
+        [FromQuery] DateTime? endDate)
+    {
+        var query = new GetOrderStatisticsQuery { StartDate = startDate, EndDate = endDate };
+        var result = await _mediator.Send(query);
+        return Ok(result);
     }
 }

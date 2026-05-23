@@ -144,13 +144,92 @@ def extract_compiler_errors(output: str) -> list[str]:
     return errors
 
 def extract_test_errors(output: str) -> list[str]:
-    """Trích xuất các test case thất bại từ console output của dotnet test."""
+    """Trích xuất chi tiết lỗi test case (error message + stack trace) từ console output của dotnet test."""
     errors = []
-    pattern = r"Failed\s+([^\s\n\r]+)"
-    matches = re.findall(pattern, output)
-    for match in matches:
-        errors.append(f"⚠️ Test case thất bại: {match.strip()}")
+    # Pattern: Failed TestName [duration]
+    fail_pattern = r"^\s*Failed\s+(\S+)\s*\["
+    # Find each failure block position
+    matches = list(re.finditer(fail_pattern, output, re.MULTILINE))
+    for i, m in enumerate(matches):
+        test_name = m.group(1)
+        block_start = m.end()
+        # Next failure or end of string
+        block_end = matches[i + 1].start() if i + 1 < len(matches) else len(output)
+        block = output[block_start:block_end]
+
+        # Extract Error Message
+        err_msg = ""
+        err_match = re.search(r"Error Message:\s*\n\s*(.+?)(?=\n\s*Stack Trace:)", block, re.DOTALL)
+        if err_match:
+            err_msg = err_match.group(1).strip()
+
+        # Extract Stack Trace (first meaningful frames)
+        stack = ""
+        stack_match = re.search(r"Stack Trace:\s*\n(.+)", block, re.DOTALL)
+        if stack_match:
+            lines = stack_match.group(1).strip().splitlines()
+            short_lines = []
+            for line in lines:
+                line = line.strip()
+                line = re.sub(r'[a-zA-Z]:\\(?:[^\\]+\\)+([^\\]+\.cs)', r'.../\1', line)
+                short_lines.append(line)
+                if len(short_lines) >= 5:
+                    short_lines.append("    ... (stack trace truncated)")
+                    break
+            stack = "\n".join(short_lines)
+
+        # Classify error type and extract source file from stack trace
+        error_class = classify_test_error(err_msg, stack)
+
+        entry = f"⚠️  {test_name}"
+        if err_msg:
+            entry += f"\n   📄 {err_msg}"
+        if error_class:
+            entry += f"\n   🏷️  {error_class}"
+        if stack:
+            entry += f"\n   🔍 {stack}"
+        errors.append(entry)
     return errors
+
+
+def classify_test_error(err_msg: str, stack: str) -> str:
+    """Phân loại lỗi test để agent biết hướng sửa mà không cần đọc stack trace."""
+    if not err_msg:
+        return ""
+    # Lỗi DB
+    if "FOREIGN KEY" in err_msg or "foreign key" in err_msg:
+        return "DB: FOREIGN KEY constraint — seed data thiếu hoặc UserId không tồn tại"
+    if "NOT NULL" in err_msg or "not null" in err_msg:
+        return "DB: NOT NULL constraint — thiếu required field khi seed data"
+    if "DbUpdateException" in err_msg or "SqliteException" in err_msg:
+        m = re.search(r"SQLite Error \d+: (.+)", err_msg)
+        return f"DB: SQLite — {m.group(1) if m else err_msg[:80]}"
+    # Lỗi HTTP
+    if "404 (Not Found)" in err_msg or "responded 404" in err_msg:
+        return "HTTP 404: Sai route — thiếu api version prefix (v1/) hoặc sai URL"
+    if "401 (Unauthorized)" in err_msg:
+        return "HTTP 401: Auth fail — sai token, credential, hoặc user chưa register"
+    if "403 (Forbidden)" in err_msg:
+        return "HTTP 403: Role fail — user không có quyền Admin"
+    if "400 (Bad Request)" in err_msg:
+        return "HTTP 400: Request sai format — date format, missing field, validation"
+    # Lỗi JSON
+    if "JsonException" in err_msg or "GetProperty" in err_msg or "KeyNotFoundException" in err_msg:
+        return "JSON: Sai cấu trúc response — ApiResponse wrapper chưa được unwrap (dùng .Data)"
+    if "JsonSerializer" in err_msg or "Deserialize" in err_msg:
+        return "JSON: Deserialize fail — response format không khớp model"
+    # Lỗi assertion
+    if "Assert." in err_msg or "Expected" in err_msg:
+        return "ASSERT: Kỳ vọng sai — kiểm tra expected value hoặc seed data"
+    # Lỗi auth/login
+    if "Invalid credentials" in err_msg or "UnauthorizedAccessException" in err_msg:
+        return "AUTH: Sai email/password — user chưa được seed hoặc register"
+    # Lỗi System
+    if "NullReferenceException" in err_msg:
+        return "NULL: Object reference not set — dependency hoặc service chưa được mock/DI"
+    if "InvalidOperationException" in err_msg:
+        return "SYSTEM: Invalid operation — sequence, collection, hoặc state sai"
+    return ""
 
 def check_csharp_linting() -> str:
     """Kiểm tra linter (dotnet format) đối với các tệp C# đã bị thay đổi trong nhánh hiện tại."""
@@ -291,6 +370,22 @@ class AIDeveloperHarness:
             self.init_llm_client()
 
         self.modified_files = set()
+        self.planner_production_files = []
+        self.test_filter_keyword = "test"
+        self.test_writer_files = []
+
+    def extract_test_filter_keyword(self, plan: str, task_description: str) -> str:
+        """Trích xuất keyword để filter test từ plan hoặc task description."""
+        text = (plan or "") + " " + (task_description or "")
+        text_lower = text.lower()
+        features = ["statistics", "cart", "product", "order", "auth", "user", "post", "category",
+                     "file", "website", "chat", "inbox", "idempotency", "search", "rating"]
+        for feat in features:
+            if feat in text_lower:
+                return feat
+        return "test"
+        self.test_filter_keyword = "test"
+        self.test_writer_files = []
 
     def init_llm_client(self):
         """Khởi tạo Client LLM dựa trên Provider."""
@@ -386,12 +481,14 @@ class AIDeveloperHarness:
                         model_id = f"models/{model_id}"
     
                     if cache_name:
+                        # Khi dùng cached_content, không được truyền system_instruction parameter.
+                        # Nhúng system_instruction vào contents thay thế.
+                        combined_prompt = f"[SYSTEM_INSTRUCTION]\n{system_instruction}\n[/SYSTEM_INSTRUCTION]\n\n{prompt}"
                         response = self.client.models.generate_content(
                             model=model_id,
-                            contents=prompt,
+                            contents=combined_prompt,
                             config=types.GenerateContentConfig(
                                 cached_content=cache_name,
-                                system_instruction=system_instruction,
                                 temperature=0.0,
                                 stop_sequences=stop_sequences
                             )
@@ -423,7 +520,10 @@ class AIDeveloperHarness:
                         with open(self.log_file, "a", encoding="utf-8") as f:
                             f.write(log_msg)
                             
-                    return response.text
+                    response_text = response.text if hasattr(response, 'text') else str(response)
+                    if response_text is None:
+                        raise ValueError("Gemini API returned empty/blocked response (response.text is None)")
+                    return response_text
                 elif self.provider == "claude":
                     kwargs = {
                         "model": self.model_name,
@@ -591,7 +691,8 @@ class AIDeveloperHarness:
         
         # 1. Chạy test tự động để tính điểm Functionality
         print("🧪 [Harness Evaluator]: Chạy kiểm thử tự động phục vụ thang điểm Functionality...")
-        test_code, test_out = run_dotnet_command("dotnet test")
+        filter_keyword = getattr(self, 'test_filter_keyword', 'test')
+        test_code, test_out = run_dotnet_command(f"dotnet test --filter FullyQualifiedName~{filter_keyword}")
         
         total_tests = 0
         passed_tests = 0
@@ -1121,6 +1222,9 @@ class AIDeveloperHarness:
 
     def print_agent_response(self, response: str):
         """Hiển thị phản hồi của Agent một cách trực quan, sạch sẽ và có cấu trúc trên terminal."""
+        if response is None:
+            print("\n🚨 [Harness Error]: Response từ LLM là None. Không thể hiển thị.")
+            return
         thought_match = re.search(r"\bTHOUGHT\s*:\s*(.*?)(?=\bACTION\s*:|$)", response, re.DOTALL | re.IGNORECASE)
         action_match = re.search(r"\bACTION\s*:\s*(.*)", response, re.DOTALL | re.IGNORECASE)
         
@@ -1203,6 +1307,9 @@ class AIDeveloperHarness:
             # 1. Gọi LLM (với lịch sử đã được tối ưu hóa token)
             optimized_history = self.condense_history_tokens(context_history)
             response = self.call_llm(optimized_history, system_instruction, stop_sequences=["OBSERVATION:", "Observation:", "=== OBSERVATION ==="])
+            if response is None:
+                print(f"\n🚨 [Harness Error]: LLM trả về None response. Dừng agent {role}.")
+                return ""
             self.print_agent_response(response)
             
             # Ghi log thought & action
@@ -1230,7 +1337,8 @@ class AIDeveloperHarness:
                 observation = format_observation(
                     status="ERROR",
                     summary="Lỗi cú pháp phản hồi.",
-                    details="Bạn bắt buộc phải đưa ra cấu trúc định dạng:\nTHOUGHT: <suy nghĩ>\nACTION: <tên_hàm>(<đối_số>)\nVui lòng chỉ chọn duy nhất một ACTION hợp lệ."
+                    details="Bạn bắt buộc phải đưa ra cấu trúc định dạng:\nTHOUGHT: <suy nghĩ>\nACTION: <tên_hàm>(<đối_số>)\nVui lòng chỉ chọn duy nhất một ACTION hợp lệ.",
+                    next_actions=["Viết lại response với định dạng THOUGTH: ...\nACTION: read_source(...) hoặc write_source(...) hoặc execute_command(...) hoặc finish_task(...)"]
                 )
                 context_history += f"\nLượt {self.iteration_count}:\n{response}\nOBSERVATION: {observation}\n"
                 continue
@@ -1352,19 +1460,22 @@ class AIDeveloperHarness:
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
                             details="Harness nghiêm cấm chạy lệnh git commit. Mọi commit phải do kỹ sư con người thực hiện thủ công.",
+                            next_actions=["Chỉ dùng git status, git diff hoặc git add. Không dùng git commit."]
                         )
-                    elif cmd not in allowed_cmds and not is_git:
+                    elif not any(cmd.startswith(allowed) for allowed in allowed_cmds) and not is_git:
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
                             details=f"Harness nghiêm cấm chạy các lệnh tùy ý. Lệnh hợp lệ: {', '.join(allowed_cmds)} hoặc git status/diff/add.",
+                            next_actions=["Chỉ dùng dotnet build, dotnet test, dotnet restore, dotnet clean, git status, git diff, git add."]
                         )
                     else:
                         is_git_change = "git " in cmd and "add" in cmd
                         if self.ask_approval(f"Agent muốn chạy lệnh hệ thống: '{cmd}'", force_ask=is_git_change):
                             code, out = run_dotnet_command(cmd)
                             status = "SUCCESS" if code == 0 else "ERROR"
-                            details = out[:3000]
+                            details = out[:3000] if "build" in cmd else out[:1000]
+                            test_fail_count = 0
                             if code != 0:
                                 if "build" in cmd:
                                     comp_errs = extract_compiler_errors(out)
@@ -1373,24 +1484,29 @@ class AIDeveloperHarness:
                                 elif "test" in cmd:
                                     test_errs = extract_test_errors(out)
                                     if test_errs:
-                                        details += "\n\n--- FAILED TEST CASES ---\n" + "\n".join(test_errs)
+                                        test_fail_count = len(test_errs)
+                                        details = "\n".join(test_errs)
                                         
                                         # Theo dõi lịch sử lỗi test để chống lặp
-                                        sorted_errs = sorted(test_errs)
-                                        self.test_failure_history.append(sorted_errs)
+                                        # Chỉ so sánh classification tags (🏷️) thay vì full error string
+                                        tags_only = []
+                                        for err in test_errs:
+                                            tags = [l for l in err.splitlines() if l.strip().startswith("🏷️")]
+                                            tags_only.extend(tags)
+                                        self.test_failure_history.append(tags_only)
                                         if len(self.test_failure_history) >= 4 and self.test_failure_history[-1] == self.test_failure_history[-2] == self.test_failure_history[-3] == self.test_failure_history[-4]:
                                             print("\n🚨 [Harness Early Exit]: Danh sách lỗi test không đổi liên tiếp 4 lần. Dừng Agent để tránh lãng phí token.")
                                             rollback_log = self.selective_rollback()
                                             print(f"⚠️ Hậu quả Rollback:\n{rollback_log}")
                                             return "FAIL: Đã kích hoạt ngắt khẩn cấp do lỗi test không thay đổi."
                                         elif len(self.test_failure_history) >= 3 and self.test_failure_history[-1] == self.test_failure_history[-2] == self.test_failure_history[-3]:
-                                            loop_warning_test = (
-                                                "\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Danh sách test case thất bại hoàn toàn KHÔNG THAY ĐỔI sau 3 lần chạy test liên tiếp.\n"
-                                                "Điều này có nghĩa là các chỉnh sửa mã nguồn gần đây của bạn không có bất kỳ tác dụng nào đối với các lỗi kiểm thử hiện tại.\n"
-                                                "Hãy thay đổi chiến thuật: đọc kỹ stack trace lỗi, kiểm tra lại Mock setups, hoặc đọc các file kiểm thử tương ứng để hiểu logic."
-                                            )
-                                            details = loop_warning_test + "\n\n" + details
-                                        
+                                                loop_warning_test = (
+                                                    "\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Danh sách test case thất bại hoàn toàn KHÔNG THAY ĐỔI sau 3 lần chạy test liên tiếp.\n"
+                                                    "Điều này có nghĩa là các chỉnh sửa mã nguồn gần đây của bạn không có bất kỳ tác dụng nào đối với các lỗi kiểm thử hiện tại.\n"
+                                                    "Hãy thay đổi chiến thuật: đọc kỹ stack trace lỗi, kiểm tra lại Mock setups, hoặc đọc các file kiểm thử tương ứng để hiểu logic."
+                                                )
+                                                details = loop_warning_test + "\n\n" + details
+
                             # Tích hợp kiểm tra tĩnh sau khi chạy build/test thành công
                             if ("build" in cmd or "test" in cmd) and code == 0:
                                 val_code, val_out = self.run_policy_validation()
@@ -1400,14 +1516,16 @@ class AIDeveloperHarness:
 
                             observation = format_observation(
                                 status=status,
-                                summary=f"Chạy lệnh '{cmd}' " + ("thành công." if status == "SUCCESS" else "thất bại."),
-                                details=details
+                                summary=f"Chạy lệnh '{cmd}' " + ("thành công." if status == "SUCCESS" else f"thất bại ({test_fail_count} lỗi test)." if test_fail_count > 0 else "thất bại."),
+                                details=details,
+                                next_actions=["Đọc DETAILS bên trên. Nếu build thất bại: sửa code bằng write_source rồi build lại. HINT: lỗi namespace/convention? Dùng read_source('CODING_POLICY.md') để xem rules. Nếu thành công: gọi finish_task để kết thúc pha."]
                             )
                         else:
                             observation = format_observation(
                                 status="ERROR",
                                 summary="Từ chối chạy lệnh.",
-                                details="Người dùng từ chối cấp quyền chạy lệnh này."
+                                details="Người dùng từ chối cấp quyền chạy lệnh này.",
+                                next_actions=["Dùng read_source hoặc write_source thay vì execute_command, hoặc finish_task để kết thúc."]
                             )
                             
                 elif action_name == "read_source":
@@ -1419,12 +1537,14 @@ class AIDeveloperHarness:
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
                             details="Nghiêm cấm đọc tệp tin cấu hình hoặc bí mật (.env, appsettings).",
+                            next_actions=["Đọc file source code (.cs) trong dự án thay vì file cấu hình."]
                         )
                     elif not is_path_safe(filepath, root_dir):
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
                             details="Nghiêm cấm đọc tệp tin nằm ngoài thư mục gốc dự án.",
+                            next_actions=["Chỉ đọc file trong thư mục dự án: Domain/, Application/, Infrastructure/, Controllers/, FloraCore.Tests/."]
                         )
                     else:
                         content = read_source_file(filepath)
@@ -1434,7 +1554,8 @@ class AIDeveloperHarness:
                             status=status,
                             summary=f"Đọc file '{filepath}' " + ("thành công." if status == "SUCCESS" else "thất bại."),
                             details=details,
-                            artifacts=[filepath]
+                            artifacts=[filepath],
+                            next_actions=["Dùng thông tin từ file này để viết/sửa code, hoặc đọc thêm file khác."]
                         )
                     
                 elif action_name == "write_source":
@@ -1442,11 +1563,26 @@ class AIDeveloperHarness:
                     content = parsed_args[1] if len(parsed_args) > 1 else ""
                     
                     # ⚠️ RÀNG BUỘC GUARDRAIL VÀ BẢO MẬT ĐƯỜNG DẪN
-                    if not is_path_safe(filepath, root_dir):
+                    if not filepath or len(parsed_args) < 2 or content is None:
+                        observation = format_observation(
+                            status="ERROR",
+                            summary="write_source missing content parameter",
+                            details="Hãy dùng write_source(filepath, content) với đầy đủ hai parameter. Parameter content không được bỏ trống.",
+                            next_actions=["Gọi lại write_source với đúng cú pháp: write_source('path/to/file.cs', r\"\"\"code here\"\"\")"]
+                        )
+                    elif not content.strip():
+                        observation = format_observation(
+                            status="ERROR",
+                            summary="write_source empty content string",
+                            details="Parameter content không được để trống (chỉ chứa khoảng trắng). Nếu bạn muốn tạo file trống, hãy viết một nội dung hợp lệ.",
+                            next_actions=["Gọi lại write_source với content không rỗng."]
+                        )
+                    elif not is_path_safe(filepath, root_dir):
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
                             details="Nghiêm cấm ghi tệp tin nằm ngoài thư mục gốc dự án.",
+                            next_actions=["Chỉ ghi file trong thư mục dự án: Domain/, Application/, Infrastructure/, Controllers/, FloraCore.Tests/."]
                         )
                     else:
                         try:
@@ -1460,18 +1596,24 @@ class AIDeveloperHarness:
                                 status="ERROR",
                                 summary="Lỗi bảo mật Harness.",
                                 details="Nghiêm cấm sửa đổi file cấu hình hệ thống, file harness hoặc appsettings.",
+                                next_actions=["Chỉ ghi file source code (.cs) trong dự án."],
+                                artifacts=[filepath]
                             )
                         elif role == "Planner" and not (normalized_path.startswith("docs/") or "execution_plan.md" in normalized_path):
                             observation = format_observation(
                                 status="ERROR",
                                 summary="Ràng buộc vai trò Planner.",
                                 details="Với vai trò Planner, bạn chỉ được phép ghi kế hoạch/đặc tả vào thư mục docs/ hoặc file plan. Không được sửa đổi mã nguồn.",
+                                next_actions=["Chỉ ghi file trong docs/ hoặc file execution_plan.md."],
+                                artifacts=[filepath]
                             )
                         elif role == "TestWriter" and not ("test" in normalized_path or "tests" in normalized_path):
                             observation = format_observation(
                                 status="ERROR",
                                 summary="Ràng buộc vai trò TestWriter.",
                                 details="Với vai trò TestWriter, bạn chỉ được phép ghi hoặc sửa đổi file test (nằm trong thư mục tests hoặc tên file chứa 'test'). Không sửa đổi code production.",
+                                next_actions=["Chỉ ghi file trong thư mục FloraCore.Tests/."],
+                                artifacts=[filepath]
                             )
                         else:
                             # Hiển thị Preview trước khi lưu
@@ -1490,13 +1632,16 @@ class AIDeveloperHarness:
                                     status=status,
                                     summary=res,
                                     details=res,
-                                    artifacts=[filepath]
+                                    artifacts=[filepath],
+                                    next_actions=["Tiếp tục: viết thêm file production code khác, hoặc gọi execute_command('dotnet build FloraCore.csproj') để kiểm tra build."]
                                 )
                             else:
                                 observation = format_observation(
                                     status="ERROR",
                                     summary="Từ chối ghi file.",
-                                    details="Người dùng từ chối ghi tệp tin lên đĩa cứng."
+                                    details="Người dùng từ chối ghi tệp tin lên đĩa cứng.",
+                                    next_actions=["Kiểm tra lại filepath hoặc nội dung, dùng write_source với thông tin khác."],
+                                    artifacts=[filepath]
                                 )
                             
                 elif action_name == "finish_task":
@@ -1509,13 +1654,15 @@ class AIDeveloperHarness:
                             status="ERROR",
                             summary="Yêu cầu sửa đổi từ Kỹ sư/Evaluator.",
                             details=feedback,
-                            next_actions=["Dựa trên feedback chi tiết trong DETAILS, hãy chỉnh sửa lại."]
+                            next_actions=["Dựa trên feedback chi tiết trong DETAILS, hãy chỉnh sửa lại."],
+                            artifacts=["feedback_from_evaluator"]
                         )
                 else:
                     observation = format_observation(
                         status="ERROR",
                         summary="Công cụ không hợp lệ.",
-                        details=f"Không hỗ trợ action '{action_name}'."
+                        details=f"Không hỗ trợ action '{action_name}'.",
+                        next_actions=["Chỉ dùng: read_source, write_source, execute_command, finish_task."]
                     )
             
             if loop_warning:
@@ -1534,7 +1681,8 @@ class AIDeveloperHarness:
                     condensed_observation = format_observation(
                         status="SUCCESS",
                         summary=f"Thực thi lệnh '{cmd}' thành công.",
-                        details="(Chi tiết log thành công đã lược bỏ.)"
+                        details="(Chi tiết log thành công đã lược bỏ.)",
+                        next_actions=["Đọc kết quả bên trên. Nếu cần chạy dotnet test hoặc finish_task."]
                     )
                     
             context_history += f"\nLượt {self.iteration_count}:\n{response}\nOBSERVATION: {condensed_observation}\n"
@@ -1572,65 +1720,25 @@ class AIDeveloperHarness:
 
         # 2. Xây dựng System Instructions cho từng vai trò
         react_instruction = (
-            "\n\n=============================================================\n"
-            "⚠️ QUY TẮC PHẢN HỒI (REACT FORMAT) - BẮT BUỘC TUÂN THỦ:\n"
-            "Mỗi lượt phản hồi của bạn BẮT BUỘC phải chia làm 2 phần rõ ràng theo đúng cấu trúc sau:\n"
-            "THOUGHT: <suy nghĩ của bạn về bước tiếp theo, phân tích kết quả quan sát trước đó>\n"
+            "\n\n--- QUY TẮC PHẢN HỒI (BẮT BUỘC) ---\n"
+            "Mỗi lượt phản hồi CHỈ GỒM 2 DÒNG:\n"
+            "THOUGHT: <suy nghĩ>\n"
             "ACTION: <tên_hàm>(<đối_số>)\n\n"
-            "Danh sách các ACTION duy nhất bạn được phép sử dụng:\n"
-            "1. `read_source(file_path)`: Đọc nội dung của một file nguồn.\n"
-            "   Ví dụ: ACTION: read_source(\"Domain/Entities/Post.cs\")\n"
-            "2. `write_source(file_path, content)`: Ghi hoặc cập nhật file nguồn.\n"
-            "   BẮT BUỘC NÊN SỬ DỤNG chuỗi Python RAW TRIPLE-QUOTES dạng: r\"\"\"<nội_dung>\"\"\" hoặc r'''<nội_dung>''' để bọc tham số `content`.\n"
-            "   Điều này giúp viết mã nguồn nhiều dòng (multiline) xuống dòng tự nhiên và chứa các dấu nháy đơn/nháy kép thoải mái mà KHÔNG CẦN ESCAPE.\n"
-            "   Tuyệt đối TRÁNH việc viết chuỗi trên một dòng rồi dùng các ký tự escape như \\n hoặc \\\\n để biểu diễn xuống dòng, vì khi ghi ra đĩa sẽ bị ghi literal dưới dạng chữ \"\\n\" chứ không xuống dòng thật.\n"
-            "   Ví dụ:\n"
-            "   ACTION: write_source(\"FloraCore.Tests/MyTest.cs\", r\"\"\"using Xunit;\n"
-            "   \n"
-            "   namespace FloraCore.Tests;\n"
-            "   public class MyTest {\n"
-            "       // Dấu nháy và \\n viết tự nhiên không cần escape\n"
-            "       public void Test1() => Assert.True(true);\n"
-            "   }\"\"\")\n"
-            "3. `execute_command(command)`: Thực thi một lệnh hệ thống.\n"
-            "   Các lệnh được phép chạy CHỈ BAO GỒM: 'dotnet build', 'dotnet test', 'dotnet restore', 'dotnet clean', 'git status', 'git diff', 'git add'. Tuyệt đối không được chạy bất kỳ lệnh nào khác.\n"
-            "   Ví dụ: ACTION: execute_command(\"dotnet test\")\n"
-            "4. `finish_task(summary)`: Hoàn thành nhiệm vụ được giao và báo cáo tóm tắt kết quả cho Kỹ sư / Evaluator.\n"
-            "   Ví dụ: ACTION: finish_task(\"Đã viết xong các unit tests và kiểm tra build thành công.\")\n\n"
-            "🚨 RÀNG BUỘC CỰC KỲ QUAN TRỌNG:\n"
-            "- Bạn CHỈ được phép chọn duy nhất 1 ACTION trong mỗi lượt phản hồi.\n"
-            "- Tuyệt đối KHÔNG tự ý tạo ra hoặc sử dụng các ACTION khác như `ask_user`, `read_file`, `create_new_file`, `ask_user()`, `create_file`... Nếu bạn làm vậy, hệ thống sẽ báo lỗi cú pháp và bạn sẽ bị kẹt.\n"
-            "- Không viết thêm bất kỳ văn bản giải thích nào ngoài 2 khối `THOUGHT:` và `ACTION:` nêu trên.\n"
-            "=============================================================\n"
+            "Actions được phép:\n"
+            "1. read_source(path) — Đọc file.\n"
+            "2. write_source(path, content) — Ghi file. Dùng r\"\"\"...\"\"\" cho multi-line code.\n"
+            "3. execute_command(cmd) — Chạy lệnh. Chỉ: dotnet build/test/restore/clean, git status/diff/add.\n"
+            "4. finish_task(summary) — Kết thúc pha.\n"
+            "🚨 CHỈ CHỌN DUY NHẤT 1 ACTION. Không dùng action khác ngoài 4 action trên.\n"
+            "---\n"
         )
 
         architecture_guidelines = (
-            "\n\n=============================================================\n"
-            "⚠️ QUY TẮC CẤU TRÚC THƯ MỤC VÀ KIẾN TRÚC DỰ ÁN (BẮT BUỘC TUÂN THỦ):\n"
-            "1. Lớp Domain (Domain Layer):\n"
-            "   - Thực thể (Entities): Phải nằm tại thư mục 'Domain/Entities/' (ví dụ: 'Domain/Entities/WebsiteInfo.cs').\n"
-            "   - Namespace chuẩn: FloraCore.Domain.Entities\n"
-            "2. Lớp Application (Application Layer):\n"
-            "   - Áp dụng MediatR CQRS (Commands/Queries).\n"
-            "   - Logic Command/Query/Handler/Validator phải tổ chức theo Features và nằm tại:\n"
-            "     'Application/Features/{Tên_Feature}/Commands/' hoặc 'Application/Features/{Tên_Feature}/Queries/'.\n"
-            "   - BẮT BUỘC: Định nghĩa cả Request (Command/Query record) và Handler của nó trong CÙNG MỘT FILE nguồn.\n"
-            "     Ví dụ: file 'Application/Features/PostCategories/Commands/CreatePostCategoryCommand.cs' chứa cả 'CreatePostCategoryCommand' và 'CreatePostCategoryCommandHandler'.\n"
-            "   - Các Interfaces repository nằm tại: 'Application/Interfaces/' (ví dụ: 'Application/Interfaces/IWebsiteInfoRepository.cs').\n"
-            "   - Namespace chuẩn: FloraCore.Application.Features.{Tên_Feature}.Commands hoặc FloraCore.Application.Features.{Tên_Feature}.Queries\n"
-            "3. Lớp Infrastructure (Infrastructure Layer):\n"
-            "   - DB Context nằm tại: 'Infrastructure/Data/AppDbContext.cs'.\n"
-            "   - Các triển khai Repository nằm tại: 'Infrastructure/Repositories/' (ví dụ: 'Infrastructure/Repositories/WebsiteInfoRepository.cs').\n"
-            "   - Đăng ký Dependency Injection tại: 'Infrastructure/DependencyInjection.cs'.\n"
-            "4. Lớp Presentation (Controllers):\n"
-            "   - Tất cả Web API Controller nằm trực tiếp trong thư mục: 'Controllers/' (không tạo thư mục con).\n"
-            "   - Tên file bắt buộc kết thúc bằng 'Controller.cs' (ví dụ: 'Controllers/WebsiteInfoController.cs').\n"
-            "   - Namespace chuẩn: FloraCore.Controllers\n"
-            "5. Thư mục Tests (FloraCore.Tests):\n"
-            "   - Cấu trúc thư mục của dự án Tests phải mô phỏng lại cấu trúc của dự án chính.\n"
-            "   - Ví dụ: 'FloraCore.Tests/Application/{Tên_Feature}/' hoặc 'FloraCore.Tests/Web/Controllers/'.\n"
-            "   - Namespace chuẩn: FloraCore.Tests.Application.{Tên_Feature} hoặc FloraCore.Tests.Web.Controllers\n"
-            "=============================================================\n"
+            "\n\n--- KIẾN TRÚC DỰ ÁN ---\n"
+            "Clean Architecture: Domain -> Application -> Infrastructure -> Controllers.\n"
+            "Xem directory tree và các file .cs hiện có trong codebase để biết namespace convention.\n"
+            "Tham khảo [docs/guides/DDD_GUIDE.md](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/docs/guides/DDD_GUIDE.md) cho design guidelines chi tiết.\n"
+            "---\n"
         )
 
         planner_system = (
@@ -1640,13 +1748,11 @@ class AIDeveloperHarness:
             "- Phân tích kiến trúc: Cần tạo mới/chỉnh sửa các thực thể (Domain), DTO/Queries/Commands/Handlers (Application), AppDbContext/Repository (Infrastructure), Controllers (Web/API).\n"
             "- Đặc tả chi tiết các thay đổi.\n"
             "- Danh sách các test cases cần viết trước (TDD).\n"
-            "Sau khi hoàn thành bản kế hoạch, bạn BẮT BUỘC phải gọi `finish_task('<nội dung kế hoạch chi tiết bằng Markdown>')` để Kỹ sư con người phê duyệt."
+            "Sau khi hoàn thành bản kế hoạch, bạn BẮT BUỘC phải gọi `finish_task('<nội dung kế hoạch chi tiết bằng Markdown>')` để Kỹ sư con người phê duyệt.\n"
+            "Chính sách lập trình bắt buộc: dùng read_source để đọc CODING_POLICY.md nếu cần.\n"
+            "Bài học kinh nghiệm: dùng read_source để đọc scripts/harness_lessons.md nếu cần."
         )
         planner_system += architecture_guidelines
-        if self.policy_content:
-            planner_system += f"\n\n--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
-        if self.lessons_content:
-            planner_system += f"\n\n--- BÀI HỌC TỰ ĐỘNG (scripts/harness_lessons.md) ---\n{self.lessons_content}"
         planner_system += react_instruction
 
         testwriter_system = (
@@ -1655,59 +1761,81 @@ class AIDeveloperHarness:
             "Bạn chỉ được phép ghi hoặc sửa đổi các tệp kiểm thử trong thư mục kiểm thử (ví dụ: FloraCore.Tests hoặc các file có hậu tố Tests.cs).\n"
             "Tuyệt đối KHÔNG ĐƯỢC sửa đổi bất kỳ tệp code production nào (trong Domain, Application, Infrastructure, Controllers).\n"
             "Sau khi viết xong các test cases, hãy chạy `dotnet build` để đảm bảo chúng biên dịch thành công. LƯU Ý: các test cases có thể thất bại khi chạy vì code production chưa được viết.\n"
-            "🚨 QUY TẮC BẮT BUỘC: Trước khi viết test cho bất kỳ class nào, bạn PHẢI dùng `read_source` để đọc mã nguồn production của class đó nhằm kiểm tra chính xác namespace, tên class, chữ ký constructor và các phương thức. TUYỆT ĐỐI KHÔNG được tự phán đoán hoặc bịa đặt namespace/chữ ký.\n"
-            "Mẫu cấu trúc test có thể tham khảo từ thư mục [FloraCore.Tests/Application/WebsiteInfo/](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/FloraCore.Tests/Application/WebsiteInfo/).\n"
+            "🚨 Trước khi viết test cho bất kỳ class nào: PHẢI dùng `read_source` để đọc mã nguồn production nhằm kiểm tra chính xác namespace, constructor signature và methods.\n"
+            "Mẫu cấu trúc test: xem [FloraCore.Tests/Application/WebsiteInfo/](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/FloraCore.Tests/Application/WebsiteInfo/).\n"
+            "\n--- 🧪 TEST PATTERNS (đọc để tránh lỗi thường gặp) ---\n"
+            "1. Mock IQueryable + async: Handler gọi ToListAsync(). Dùng `source.AsAsyncQueryable()` thay vì `source.AsQueryable()`.\n"
+            "   System.Linq.AsyncQueryable không support với List.AsQueryable().\n"
+            "2. Date timing: KHÔNG dùng DateTime.Now trực tiếp trong seed và filter. Dùng `var today = DateTime.Today;` 1 biến chung.\n"
+            "3. Integration Auth: Route prefix PHẢI là /api/v1/ (VD: /api/v1/auth/login). User PHẢI register trước login.\n"
+            "4. ApiResponse unwrap: Controller trả về ApiResponse<T>. Dùng .Data để lấy body thật. Cần using System.Net.Http.Json.\n"
+            "5. Seed data FK: Order.UserId PHẢI là Guid của user đã seed. ShippingAddress NOT NULL.\n"
+            "6. Custom factory: Dùng CustomWebApplicationFactory (IClassFixture), không WebApplicationFactory<Program>.\n"
+            "---\n"
+            "Đọc scripts/harness_lessons.md để biết thêm chi tiết từng pattern.\n"
+            "Chính sách lập trình: đọc CODING_POLICY.md nếu cần.\n"
+            "Bài học kinh nghiệm: đọc scripts/harness_lessons.md nếu cần.\n"
             "Gọi `finish_task('<báo cáo các file test đã viết>')` khi hoàn thành."
         )
         testwriter_system += architecture_guidelines
-        if self.policy_content:
-            testwriter_system += f"\n\n--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
-        if self.lessons_content:
-            testwriter_system += f"\n\n--- BÀI HỌC TỰ ĐỘNG (scripts/harness_lessons.md) ---\n{self.lessons_content}"
         testwriter_system += react_instruction
 
         developer_system = (
             "Bạn là một Kỹ sư .NET 9 Senior, làm việc trên dự án FloraCore (Clean Architecture + CQRS + MediatR).\n"
             "Nhiệm vụ của bạn là hiện thực hóa logic nghiệp vụ trong các lớp Domain, Application, Infrastructure, Controllers dựa trên Bản kế hoạch (Execution Plan) và vượt qua toàn bộ các test cases đã được viết.\n"
-            "Hãy tuân thủ nghiêm ngặt chính sách lập trình (CODING_POLICY.md).\n"
-            "🚨 QUY TẮC PHÁT TRIỂN QUAN TRỌNG:\n"
-            "- BẮT BUỘC sử dụng C# 12+ Primary Constructors cho TẤT CẢ các lớp có Dependency Injection bao gồm Repositories, Handlers, Controllers, và DbContext. KHÔNG ĐƯỢC phép sử dụng cấu trúc constructor truyền thống.\n"
-            "- BẮT BUỘC thực hiện kiểm tra null ngay đầu constructor cho mọi tham số được inject bằng `ArgumentNullException.ThrowIfNull(dependency)` hoặc gán qua private readonly field kèm `?? throw new ArgumentNullException(...)`.\n"
-            "- Hãy tham chiếu trực tiếp đến các file code mẫu có sẵn để bắt chước cấu trúc thiết kế chuẩn của project:\n"
-            "  * Xem [GenericRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/GenericRepository.cs) làm repository cơ sở.\n"
-            "  * Xem [ProductRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/ProductRepository.cs) và [WebsiteInfoRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/WebsiteInfoRepository.cs) làm mẫu kế thừa GenericRepository, khai báo Primary Constructors C# 12+ kèm ThrowIfNull check.\n"
-            "  * Xem [UnitOfWork.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Data/UnitOfWork.cs) làm mẫu cấu trúc UoW.\n"
-            "  * Xem các Handlers trong [Application/Features/WebsiteInfo/Commands](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Application/Features/WebsiteInfo/Commands/) làm mẫu viết Command/CommandHandler trong cùng một file kèm Primary Constructor.\n"
-            "  * Mẫu Controller sử dụng Primary Constructor C# 12+:\n"
-            "    ```csharp\n"
-            "    [ApiController]\n"
-            "    [Route(\"api/[controller]\")]\n"
-            "    public class OrdersController(IMediator mediator) : ControllerBase\n"
-            "    {\n"
-            "        private readonly IMediator _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));\n"
-            "        // ...\n"
-            "    }\n"
-            "    ```\n"
-            "  * Mẫu DbContext sử dụng Primary Constructor C# 12+:\n"
-            "    ```csharp\n"
-            "    public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>(options)\n"
-            "    {\n"
-            "        private readonly DbContextOptions<AppDbContext> _options = options ?? throw new ArgumentNullException(nameof(options));\n"
-            "        // ...\n"
-            "    }\n"
-            "    ```\n"
-            "Bạn được phép đọc tất cả các file và ghi vào các file production code. Tuyệt đối KHÔNG sửa đổi file cấu hình hệ thống (.env) hoặc file harness (`ai_developer_harness.py`).\n"
-            "Thường xuyên chạy `dotnet build` và `dotnet test` để kiểm tra tiến trình.\n"
-            "Sau khi vượt qua toàn bộ tests và không còn lỗi linter, hãy gọi `finish_task('<báo cáo chi tiết các file đã sửa đổi>')` để gửi cho Evaluator.\n\n"
+            "Hãy tuân thủ nghiêm ngặt chính sách lập trình. Nếu build báo lỗi CS0246 (namespace) hoặc CS1729 (constructor signature), hãy dùng read_source('CODING_POLICY.md') để xem rules cụ thể.\n"
+            "\n🚨 CHIẾN LƯỢC PHÁT TRIỂN:\n"
+            "BƯỚC 1 - VIẾT HẾT CODE PRODUCTION:\n"
+            "   - Đọc kế hoạch (Execution Plan) để biết danh sách các file production code cần tạo (DTO/Query/Handler/Repository/Controller).\n"
+            "   - Dùng `write_source` để viết lần lượt từng file production code vào đúng đường dẫn.\n"
+            "   - KHÔNG được gọi `execute_command` trong Bước 1.\n"
+            "\nBƯỚC 2 - BUILD CHỈ ĐỊNH (production-only):\n"
+            "   - Gọi `execute_command('dotnet build FloraCore.csproj')` để chỉ build project production.\n"
+            "   - Nếu build FAIL: đọc compiler errors (CSxxxx) từ OBSERVATION, dùng read_source + write_source để sửa, build lại.\n"
+            "\nBƯỚC 3 - CHẠY TEST (chỉ sau khi Build Success):\n"
+            "   - Gọi `execute_command('dotnet test --filter FullyQualifiedName~<FEATURE_KEYWORD>')` để chạy test.\n"
+            "   - Thay <FEATURE_KEYWORD> bằng keyword rút từ Execution Plan hoặc tên feature (VD: statistics, cart, product, auth, order, user, post, category, search, website, chat, file, inbox).\n"
+            "\n🚨 DEBUG INTEGRATION TEST (batch — 1 lần đọc hết):\n"
+            "   OBSERVATION sẽ hiển thị TẤT CẢ lỗi test + stack trace + classification tag (🏷️).\n"
+            "   Hãy làm như sau trong MỘT lần:\n"
+            "   1. Đọc HẾT các lỗi + tag để tìm pattern chung (vd: toàn bộ là 404 → sai route prefix; toàn bộ là FK → thiếu seed data).\n"
+            "   2. Nếu pattern là \"cùng một root cause\" → sửa 1 lần cho tất cả (vd: sửa route từ /api/auth → /api/v1/auth).\n"
+            "   3. Nếu lỗi độc lập → ưu tiên sửa lỗi DB/HTTP trước (thường là root cause), rồi ASSERT cuối.\n"
+            "   4. KHÔNG chạy lại test sau mỗi lỗi — chỉ chạy lại SAU KHI sửa xong tất cả.\n"
+            "   ⚠️  KHÔNG ghi đè file test. Chỉ sửa production code hoặc test infrastructure (factory, seed).\n"
+            "   🏷️  Tag classification giúp bạn biết ngay hướng fix mà không cần đọc stack trace:\n"
+            "       HTTP 404 → sai URL (thiếu version prefix)\n"
+            "       HTTP 401 → sai credential (user chưa register)\n"
+            "       DB FOREIGN_KEY → seed data thiếu reference\n"
+            "       JSON KeyNotFound → chưa unwrap ApiResponse.Data\n"
+            "       SYSTEM: InvalidOperation → IQueryable không support async (dùng AsAsyncQueryable thay AsQueryable)\n"
+            "\n--- 🧪 TEST PATTERNS (đọc để fix nhanh) ---\n"
+            "1. Mock IQueryable: Handler gọi ToListAsync(). Nếu test dùng .AsQueryable() → crash IAsyncEnumerable. Dùng .AsAsyncQueryable().\n"
+            "2. Date timing: Dùng DateTime.Today thay DateTime.Now để tránh micro-giây lệch.\n"
+            "3. Route prefix: PHẢI là /api/v1/ (không /api/).\n"
+            "4. ApiResponse wrap: Controller trả về ApiResponse<T>. Mở bằng .Data.\n"
+            "5. Seed FK: UserId phải khớp user đã seed. ShippingAddress NOT NULL.\n"
+            "6. Factory: Dùng CustomWebApplicationFactory.\n"
+            "Đọc scripts/harness_lessons.md để biết thêm chi tiết từng pattern.\n"
+            "\nBƯỚC 4 - BÁO CÁO:\n"
+            "   - Chỉ khi Bước 2 và 3 đều thành công, gọi `finish_task('...')`.\n"
+            "\n🚨 QUY TẮC PHÁT TRIỂN QUAN TRỌNG:\n"
+            "- BẮT BUỘC C# 12+ Primary Constructors cho DI classes.\n"
+            "- BẮT BUỘC `ArgumentNullException.ThrowIfNull(dependency)` đầu constructor.\n"
+            "- Tham khảo file mẫu:\n"
+            "  * [GenericRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/GenericRepository.cs)\n"
+            "  * [ProductRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/ProductRepository.cs)\n"
+            "  * [UnitOfWork.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Data/UnitOfWork.cs)\n"
+            "  * Handlers in [Application/Features/WebsiteInfo/Commands](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Application/Features/WebsiteInfo/Commands/)\n"
+            "  * Controller mẫu: [OrdersController.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Controllers/OrdersController.cs) (Primary Constructor)\n"
+            "Bài học kinh nghiệm: đọc scripts/harness_lessons.md nếu cần.\n"
         )
         developer_system += architecture_guidelines
-        if self.policy_content:
-            developer_system += f"--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
-        if self.lessons_content:
-            developer_system += f"\n\n--- BÀI HỌC TỰ ĐỘNG (scripts/harness_lessons.md) ---\n{self.lessons_content}"
         developer_system += react_instruction
 
         # 3. Định nghĩa các Callback kết thúc cho từng pha
+        
+
         
         # --- CALLBACK PHA 1: PLANNING ---
         def on_planner_finish(plan_content: str):
@@ -1727,6 +1855,23 @@ class AIDeveloperHarness:
             except Exception as e:
                 print(f"⚠️ Không thể lưu file kế hoạch: {e}")
                 
+            # Trích xuất danh sách file production code từ kế hoạch
+            production_files = []
+            # Tìm tất cả đường dẫn file .cs trong plan content (có thể trong backticks, sau dấu - hoặc plain)
+            path_pattern = r"(?:Application/Features/\S+\.cs|Infrastructure/\S+\.cs|Controllers/\S+\.cs|Domain/\S+\.cs)"
+            matches = re.findall(path_pattern, plan_content)
+            for m in matches:
+                # Clean backticks và whitespace
+                cleaned = m.strip('`').strip()
+                if cleaned not in production_files:
+                    production_files.append(cleaned)
+            self.planner_production_files = production_files
+            # Trích xuất keyword để lọc test từ kế hoạch
+            self.test_filter_keyword = self.extract_test_filter_keyword(plan_content, task_description)
+            print(f"🔑 [Harness]: Test filter keyword: '{self.test_filter_keyword}'")
+            if production_files:
+                print(f"📋 [Harness]: Phát hiện {len(production_files)} file production code cần tạo trong kế hoạch: {', '.join(production_files)}")
+                
             approved = self.ask_approval("Bạn có đồng ý phê duyệt Bản kế hoạch thực thi này không?", force_ask=True)
             if approved:
                 return True, ""
@@ -1741,6 +1886,13 @@ class AIDeveloperHarness:
             print("=============================================================")
             print(test_report)
             print("=============================================================\n")
+            
+            # Trích xuất danh sách file test từ report
+            test_file_pattern = r"FloraCore\.Tests/\S+\.cs|FloraCore\.Tests\\\S+\.cs"
+            found_test_files = re.findall(test_file_pattern, test_report)
+            self.test_writer_files = list(set(found_test_files))
+            if self.test_writer_files:
+                print(f"📋 [Harness]: Phát hiện {len(self.test_writer_files)} file test: {', '.join(self.test_writer_files)}")
             
             if self.mock_mode:
                 approved = self.ask_approval("Bạn có phê duyệt bộ Test Cases này không?", force_ask=True)
@@ -1801,22 +1953,45 @@ class AIDeveloperHarness:
                 else:
                     return False, f"Evaluator từ chối với điểm {score:.2f} < {self.pass_threshold}.\nBáo cáo:\n{report}"
                     
-            print("⚙️ Chạy build hệ thống...")
-            code, out = run_dotnet_command("dotnet build")
+            print("⚙️ Chạy build hệ thống (production code)...")
+            code, out = run_dotnet_command("dotnet build FloraCore.csproj") # Production only
             if code != 0:
                 errs = extract_compiler_errors(out)
-                return False, "Không thể build hệ thống sau khi code. Chi tiết lỗi:\n" + "\n".join(errs)
+                # Kiểm tra xem developer đã viết đủ số file production code trong plan chưa
+                missing_files = []
+                if hasattr(self, 'planner_production_files') and self.planner_production_files:
+                    for file in self.planner_production_files:
+                        file_path = os.path.join(root_dir, file) if not os.path.isabs(file) else file
+                        if not os.path.exists(file_path):
+                            missing_files.append(file)
+                
+                if missing_files:
+                    feedback_msg = "PRODUCTION CODE THIẾU FILE:\n"
+                    feedback_msg += "\n".join([f"- {file}" for file in missing_files])
+                    feedback_msg += "\n\nHãy dừng `finish_task` lại và sử dụng `write_source` để viết đầy đủ các file production code này trước khi build. VIẾT HẾT -> BUILD."
+                    return False, feedback_msg
+                
+                return False, "PRODUCTION CODE BUILD FAILED. Hãy viết THÊM production code hoặc sửa lỗi compiler trước khi build lại. HINT: Lỗi namespace/convention? Dùng `read_source('CODING_POLICY.md')` để xem rules. Xem lỗi compiler bên dưới để định hướng file nào cần tạo/sửa:\n" + "\n".join(errs)
                 
             print("🧹 Kiểm tra Coding Policy tĩnh...")
             val_code, val_out = self.run_policy_validation()
             if val_code != 0:
-                return False, "Phát hiện lỗi vi phạm Coding Policy (Tĩnh) sau khi build thành công. Bạn phải sửa đổi các lỗi này:\n" + val_out
+                return False, "Phát hiện lỗi vi phạm Coding Policy (Tĩnh). Dùng `read_source('CODING_POLICY.md')` để xem rules cụ thể, tìm section liên quan đến lỗi bên dưới, rồi sửa code bằng `write_source`. Chi tiết:\n" + val_out
                 
-            print("⚙️ Chạy tests hệ thống...")
-            t_code, t_out = run_dotnet_command("dotnet test")
+            print("⚙️ Chạy tests hệ thống (chỉ chạy test liên quan đến feature mới)...")
+            # Dynamic filter keyword từ plan
+            filter_keyword = getattr(self, 'test_filter_keyword', 'test')
+            t_code, t_out = run_dotnet_command(f"dotnet test --filter FullyQualifiedName~{filter_keyword}")
             if t_code != 0:
                 errs = extract_test_errors(t_out)
-                return False, "Một số bài test thất bại hoặc lỗi biên dịch test. Chi tiết:\n" + "\n".join(errs)
+                # Summarize error categories so agent can batch-fix
+                tags = set()
+                for e in errs:
+                    for line in e.splitlines():
+                        if line.strip().startswith("🏷️"):
+                            tags.add(line.strip())
+                tag_summary = "\n".join(sorted(tags)) if tags else ""
+                return False, "TESTS FAIL: Sửa tất cả lỗi dưới đây TRONG MỘT LẦN (không chạy lại test sau mỗi lỗi).\n\n" + (tag_summary + "\n\n" if tag_summary else "") + "\n".join(errs)
                 
             # Duyệt Pha 4: Chấm điểm đối nghịch
             score, report = self.run_gan_evaluation(task_description)
