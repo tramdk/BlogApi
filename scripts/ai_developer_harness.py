@@ -32,6 +32,10 @@ except ImportError:
 
 def run_dotnet_command(command: str) -> tuple[int, str]:
     """Chạy một lệnh dotnet CLI hoặc git và trả về exit code cùng console output."""
+    # Chặn tấn công Command Injection bằng cách kiểm tra các ký tự nối lệnh shell
+    forbidden_chars = [';', '&', '|', '`', '$', '\n', '\r']
+    if any(char in command for char in forbidden_chars):
+        return -3, "Lỗi bảo mật: Lệnh chứa ký tự cấm nối lệnh (Command Injection Guardrail)."
     try:
         print(f"\n[Harness Executing]: {command}")
         # Chạy lệnh trong thư mục hiện tại của dự án
@@ -70,6 +74,15 @@ def write_source_file(file_path: str, content: str) -> str:
         return "Ghi file thành công."
     except Exception as e:
         return f"Lỗi ghi file: {str(e)}"
+
+def is_path_safe(file_path: str, root_dir: str) -> bool:
+    """Kiểm tra xem đường dẫn file có nằm hoàn toàn trong thư mục gốc dự án hay không (tránh Path Traversal)."""
+    try:
+        abs_target = os.path.abspath(file_path)
+        abs_root = os.path.abspath(root_dir)
+        return os.path.commonpath([abs_root, abs_target]) == abs_root
+    except Exception:
+        return False
 
 def strip_wrapping_quotes(s: str) -> str:
     """Loại bỏ các ký tự bao bọc chuỗi như nháy đơn, nháy kép, triple quotes, hoặc prefix verbatim (@, $, r, f)."""
@@ -236,9 +249,9 @@ class AIDeveloperHarness:
         os.makedirs(self.evals_dir, exist_ok=True)
         self.log_file = os.path.join(self.evals_dir, "harness_run.log")
         
-        # Ghi log dòng chào mừng cho phiên làm việc mới
-        with open(self.log_file, "a", encoding="utf-8") as f:
-            f.write(f"\n\n=============================================================\n")
+        # Ghi log dòng chào mừng cho phiên làm việc mới (Ghi đè 'w' để tránh log phình to)
+        with open(self.log_file, "w", encoding="utf-8") as f:
+            f.write(f"=============================================================\n")
             f.write(f"PHIÊN LÀM VIỆC MỚI KHỞI CHẠY (MULTI-AGENT SPEC-DRIVEN FLOW)\n")
             f.write(f"=============================================================\n")
         
@@ -816,6 +829,24 @@ class AIDeveloperHarness:
         if self.policy_content:
             contents.append(f"--- CODING POLICY (BẮT BUỘC TUÂN THỦ) ---\n{self.policy_content}")
             
+        # 1b. DDD Guide
+        ddd_guide_path = os.path.join(root_dir, "docs", "guides", "DDD_GUIDE.md")
+        if os.path.exists(ddd_guide_path):
+            try:
+                with open(ddd_guide_path, "r", encoding="utf-8") as df:
+                    contents.append(f"--- DDD ARCHITECTURE & DESIGN GUIDELINES ---\n{df.read()}")
+            except Exception:
+                pass
+            
+        # 1c. Harness Lessons Learned (Tự học & Đúc kết kinh nghiệm)
+        lessons_path = os.path.join(root_dir, "docs", "guides", "harness_lessons.md")
+        if os.path.exists(lessons_path):
+            try:
+                with open(lessons_path, "r", encoding="utf-8") as lf:
+                    contents.append(f"--- BÀI HỌC KINH NGHIỆM ĐÃ TỰ ĐÚC KẾT (BẮT BUỘC TRÁNH LỖI SAU) ---\n{lf.read()}")
+            except Exception:
+                pass
+            
         # 2. Cây thư mục dự án
         dir_tree = self.generate_directory_tree()
         contents.append(f"--- CẤU TRÚC THƯ MỤC DỰ ÁN ---\n{dir_tree}")
@@ -907,6 +938,117 @@ class AIDeveloperHarness:
         for header_str, body_str in turns:
             rebuilt += header_str + body_str
         return rebuilt
+
+    def distill_and_persist_lessons(self, task_description: str):
+        """Tự động phân tích lịch sử log chạy và báo cáo đánh giá để đúc kết bài học kinh nghiệm vào harness_lessons.md."""
+        print("\n🧠 [Harness Distiller]: Đang phân tích log và tự động đúc kết bài học kinh nghiệm cho các lần chạy sau...")
+        
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.dirname(script_dir)
+        lessons_dir = os.path.join(root_dir, "docs", "guides")
+        os.makedirs(lessons_dir, exist_ok=True)
+        lessons_path = os.path.join(lessons_dir, "harness_lessons.md")
+        
+        # 1. Đọc nội dung cũ nếu có
+        existing_lessons = ""
+        if os.path.exists(lessons_path):
+            try:
+                with open(lessons_path, "r", encoding="utf-8") as lf:
+                    existing_lessons = lf.read()
+            except Exception:
+                existing_lessons = ""
+                
+        # 2. Đọc log file và báo cáo evaluation mới nhất
+        log_content = ""
+        if os.path.exists(self.log_file):
+            try:
+                with open(self.log_file, "r", encoding="utf-8") as f:
+                    log_content = f.read()
+            except Exception:
+                log_content = ""
+                
+        report_path = os.path.join(self.evals_dir, "evaluation_report.md")
+        report_content = ""
+        if os.path.exists(report_path):
+            try:
+                with open(report_path, "r", encoding="utf-8") as r:
+                    report_content = r.read()
+            except Exception:
+                report_content = ""
+                
+        # Giới hạn dung lượng text gửi lên LLM để tránh quá tải token
+        log_snippet = log_content[:15000] + ("\n...[TRUNCATED]..." if len(log_content) > 15000 else "")
+        report_snippet = report_content[:8000] + ("\n...[TRUNCATED]..." if len(report_content) > 8000 else "")
+        
+        # 3. Prompt gửi cho LLM
+        distiller_system = (
+            "Bạn là một AI Developer Coach chuyên nghiệp cho dự án .NET 9 FloraCore.\n"
+            "Nhiệm vụ của bạn là phân tích nhật ký thực thi (log) và báo cáo phản biện (evaluation report) "
+            "để rút ra bài học kinh nghiệm sâu sắc giúp AI Developer Agent tránh lỗi và lập trình thông minh hơn ở các lần chạy sau.\n"
+            "Bạn BẮT BUỘC phải viết bài học kinh nghiệm bằng tiếng Việt, có tiêu đề chính là `# BÀI HỌC KINH NGHIỆM ĐÃ TỰ ĐÚC KẾT`.\n"
+            "Hãy tập trung vào:\n"
+            "1. Lỗi biên dịch C# (mã lỗi CSxxxx) phát sinh và cách khắc phục.\n"
+            "2. Lỗi thiết kế Clean Architecture, CQRS, MediatR không tuân thủ mẫu chuẩn.\n"
+            "3. Lỗi kiểm thử (Tests) thất bại do sai constructor, namespace hoặc thiếu mock dữ liệu.\n"
+            "4. Các lưu ý lập trình C# 12+ (Primary Constructors, ThrowIfNull, File-Scoped Namespaces) đã được tối ưu.\n\n"
+            "Hãy gộp (merge) các kinh nghiệm mới này vào danh sách kinh nghiệm cũ (nếu có) một cách logic, "
+            "phân loại theo nhóm rõ ràng, tránh trùng lặp thông tin. Hãy trả về toàn bộ nội dung file Markdown mới hoàn chỉnh."
+        )
+        
+        distill_prompt = (
+            f"Yêu cầu nhiệm vụ đã thực hiện: {task_description}\n\n"
+            f"--- CÁC BÀI HỌC CŨ ĐÃ LƯU TRỮ (nếu có) ---\n"
+            f"{existing_lessons if existing_lessons else '[Chưa có bài học cũ nào được lưu trữ]'}\n\n"
+            f"--- BÁO CÁO KIỂM DUYỆT EVALUATOR ---\n"
+            f"{report_snippet if report_snippet else '[Chưa có báo cáo kiểm duyệt]'}\n\n"
+            f"--- NHẬT KÝ CHẠY LOG FILE (Tóm tắt) ---\n"
+            f"```text\n{log_snippet}\n```\n\n"
+            "Hãy phân tích và viết nội dung file Markdown bài học đúc kết tích lũy (bao gồm cả kinh nghiệm cũ đã gộp thông minh)."
+        )
+        
+        # Gọi LLM hoặc chạy Mock
+        new_lessons = ""
+        if self.mock_mode:
+            new_lessons = (
+                "# BÀI HỌC KINH NGHIỆM ĐÃ TỰ ĐÚC KẾT\n\n"
+                "## ⚙️ 1. Quản lý Lớp Domain & Application\n"
+                "- **Bảo vệ tính thuần khiết của Domain:** Domain Layer tuyệt đối không phụ thuộc vào Infrastructure hoặc Application. "
+                "Định nghĩa Entities phải kế thừa từ `BaseEntity`.\n\n"
+                "## 🛠️ 2. Ép buộc Quy tắc C# 12+\n"
+                "- **Primary Constructor Check:** Khi dùng Primary Constructor (C# 12+), nếu có tham số, phải kiểm tra null "
+                "bằng `ArgumentNullException.ThrowIfNull` trước khi sử dụng.\n\n"
+                "## 🧪 3. Viết Test Cases\n"
+                "- **Constructor Signature Alignment:** Trước khi viết unit test, hãy đọc kỹ cấu trúc của lớp production thực tế để "
+                "khai báo tham số mock khớp 100% với signature thực tế."
+            )
+        else:
+            try:
+                # Thiết lập current_role tạm thời cho Distiller
+                old_role = self.current_role
+                self.current_role = "Distiller"
+                new_lessons = self.call_llm(distill_prompt, distiller_system)
+                self.current_role = old_role
+            except Exception as e:
+                print(f"⚠️ [Harness Distiller Error]: Lỗi gọi LLM Distiller: {e}")
+                return
+                
+        # Làm sạch Markdown block nếu LLM bọc trong ```markdown
+        cleaned_lessons = new_lessons.strip()
+        if cleaned_lessons.startswith("```markdown"):
+            cleaned_lessons = cleaned_lessons[11:]
+        elif cleaned_lessons.startswith("```"):
+            cleaned_lessons = cleaned_lessons[3:]
+        if cleaned_lessons.endswith("```"):
+            cleaned_lessons = cleaned_lessons[:-3]
+        cleaned_lessons = cleaned_lessons.strip()
+        
+        # 4. Ghi đè lên đĩa cứng
+        try:
+            with open(lessons_path, "w", encoding="utf-8") as lf:
+                lf.write(cleaned_lessons)
+            print(f"💾 [Harness Distiller Success]: Đã tự động đúc kết kinh nghiệm và cập nhật vào: docs/guides/harness_lessons.md")
+        except Exception as e:
+            print(f"⚠️ [Harness Distiller Error]: Không thể lưu file bài học kinh nghiệm: {e}")
 
     def print_agent_response(self, response: str):
         """Hiển thị phản hồi của Agent một cách trực quan, sạch sẽ và có cấu trúc trên terminal."""
@@ -1103,17 +1245,23 @@ class AIDeveloperHarness:
                 if action_name == "execute_command":
                     cmd = parsed_args[0] if len(parsed_args) > 0 else ""
                     # Kiểm tra xem có phải lệnh git hoặc dotnet an toàn không
-                    is_git = cmd.startswith("git ") and any(sub in cmd for sub in ["status", "add", "diff"])
                     allowed_cmds = ["dotnet build", "dotnet test", "dotnet restore", "dotnet clean"]
+                    is_git = cmd.startswith("git ") and any(sub in cmd for sub in ["status", "add", "diff"])
                     
-                    if cmd not in allowed_cmds and not is_git:
+                    if "commit" in cmd.lower():
+                        observation = format_observation(
+                            status="ERROR",
+                            summary="Lỗi bảo mật Harness.",
+                            details="Harness nghiêm cấm chạy lệnh git commit. Mọi commit phải do kỹ sư con người thực hiện thủ công.",
+                        )
+                    elif cmd not in allowed_cmds and not is_git:
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
                             details=f"Harness nghiêm cấm chạy các lệnh tùy ý. Lệnh hợp lệ: {', '.join(allowed_cmds)} hoặc git status/diff/add.",
                         )
                     else:
-                        is_git_change = "git " in cmd and any(sub in cmd for sub in ["commit", "add"])
+                        is_git_change = "git " in cmd and "add" in cmd
                         if self.ask_approval(f"Agent muốn chạy lệnh hệ thống: '{cmd}'", force_ask=is_git_change):
                             code, out = run_dotnet_command(cmd)
                             status = "SUCCESS" if code == 0 else "ERROR"
@@ -1142,71 +1290,92 @@ class AIDeveloperHarness:
                             
                 elif action_name == "read_source":
                     filepath = parsed_args[0] if len(parsed_args) > 0 else ""
-                    content = read_source_file(filepath)
-                    status = "SUCCESS" if not content.startswith("Lỗi đọc file") else "ERROR"
-                    details = content[:12000] + ("\n...[TRUNCATED]..." if len(content) > 12000 else "")
-                    observation = format_observation(
-                        status=status,
-                        summary=f"Đọc file '{filepath}' " + ("thành công." if status == "SUCCESS" else "thất bại."),
-                        details=details,
-                        artifacts=[filepath]
-                    )
+                    # ⚠️ KIỂM TRA BẢO MẬT ĐƯỜNG DẪN VÀ ĐỌC SECRET .ENV
+                    normalized_name = os.path.basename(filepath).lower()
+                    if normalized_name == ".env" or "appsettings" in normalized_name or ".env." in normalized_name:
+                        observation = format_observation(
+                            status="ERROR",
+                            summary="Lỗi bảo mật Harness.",
+                            details="Nghiêm cấm đọc tệp tin cấu hình hoặc bí mật (.env, appsettings).",
+                        )
+                    elif not is_path_safe(filepath, root_dir):
+                        observation = format_observation(
+                            status="ERROR",
+                            summary="Lỗi bảo mật Harness.",
+                            details="Nghiêm cấm đọc tệp tin nằm ngoài thư mục gốc dự án.",
+                        )
+                    else:
+                        content = read_source_file(filepath)
+                        status = "SUCCESS" if not content.startswith("Lỗi đọc file") else "ERROR"
+                        details = content[:12000] + ("\n...[TRUNCATED]..." if len(content) > 12000 else "")
+                        observation = format_observation(
+                            status=status,
+                            summary=f"Đọc file '{filepath}' " + ("thành công." if status == "SUCCESS" else "thất bại."),
+                            details=details,
+                            artifacts=[filepath]
+                        )
                     
                 elif action_name == "write_source":
                     filepath = parsed_args[0] if len(parsed_args) > 0 else ""
                     content = parsed_args[1] if len(parsed_args) > 1 else ""
                     
-                    # ⚠️ RÀNG BUỘC GUARDRAIL THEO VAI TRÒ
-                    try:
-                        # Chuyển đổi về đường dẫn tương đối so với thư mục gốc dự án
-                        rel_path = os.path.relpath(os.path.abspath(filepath), root_dir)
-                    except Exception:
-                        rel_path = filepath
-                    normalized_path = rel_path.lower().replace("\\", "/")
-                    
-                    if "ai_developer_harness.py" in normalized_path or ".env" in normalized_path:
+                    # ⚠️ RÀNG BUỘC GUARDRAIL VÀ BẢO MẬT ĐƯỜNG DẪN
+                    if not is_path_safe(filepath, root_dir):
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
-                            details="Nghiêm cấm sửa đổi file cấu hình hệ thống hoặc file harness.",
-                        )
-                    elif role == "Planner" and not (normalized_path.startswith("docs/") or "execution_plan.md" in normalized_path):
-                        observation = format_observation(
-                            status="ERROR",
-                            summary="Ràng buộc vai trò Planner.",
-                            details="Với vai trò Planner, bạn chỉ được phép ghi kế hoạch/đặc tả vào thư mục docs/ hoặc file plan. Không được sửa đổi mã nguồn.",
-                        )
-                    elif role == "TestWriter" and not ("test" in normalized_path or "tests" in normalized_path):
-                        observation = format_observation(
-                            status="ERROR",
-                            summary="Ràng buộc vai trò TestWriter.",
-                            details="Với vai trò TestWriter, bạn chỉ được phép ghi hoặc sửa đổi file test (nằm trong thư mục tests hoặc tên file chứa 'test'). Không sửa đổi code production.",
+                            details="Nghiêm cấm ghi tệp tin nằm ngoài thư mục gốc dự án.",
                         )
                     else:
-                        # Hiển thị Preview trước khi lưu
-                        print(f"\n==========================================")
-                        print(f"📄 PREVIEW FILE CẦN GHI: '{filepath}' ({role})")
-                        print(f"==========================================")
-                        print(content[:500] + ("\n...[còn tiếp]..." if len(content) > 500 else ""))
-                        print(f"==========================================\n")
+                        try:
+                            rel_path = os.path.relpath(os.path.abspath(filepath), root_dir)
+                        except Exception:
+                            rel_path = filepath
+                        normalized_path = rel_path.lower().replace("\\", "/")
                         
-                        if self.ask_approval(f"Đồng ý cho Agent ghi file: '{filepath}'?"):
-                            res = write_source_file(filepath, content)
-                            status = "SUCCESS" if res == "Ghi file thành công." else "ERROR"
-                            if status == "SUCCESS":
-                                self.modified_files.add(os.path.abspath(filepath))
-                            observation = format_observation(
-                                status=status,
-                                summary=res,
-                                details=res,
-                                artifacts=[filepath]
-                            )
-                        else:
+                        if "ai_developer_harness.py" in normalized_path or ".env" in normalized_path or "appsettings" in normalized_path:
                             observation = format_observation(
                                 status="ERROR",
-                                summary="Từ chối ghi file.",
-                                details="Người dùng từ chối ghi tệp tin lên đĩa cứng."
+                                summary="Lỗi bảo mật Harness.",
+                                details="Nghiêm cấm sửa đổi file cấu hình hệ thống, file harness hoặc appsettings.",
                             )
+                        elif role == "Planner" and not (normalized_path.startswith("docs/") or "execution_plan.md" in normalized_path):
+                            observation = format_observation(
+                                status="ERROR",
+                                summary="Ràng buộc vai trò Planner.",
+                                details="Với vai trò Planner, bạn chỉ được phép ghi kế hoạch/đặc tả vào thư mục docs/ hoặc file plan. Không được sửa đổi mã nguồn.",
+                            )
+                        elif role == "TestWriter" and not ("test" in normalized_path or "tests" in normalized_path):
+                            observation = format_observation(
+                                status="ERROR",
+                                summary="Ràng buộc vai trò TestWriter.",
+                                details="Với vai trò TestWriter, bạn chỉ được phép ghi hoặc sửa đổi file test (nằm trong thư mục tests hoặc tên file chứa 'test'). Không sửa đổi code production.",
+                            )
+                        else:
+                            # Hiển thị Preview trước khi lưu
+                            print(f"\n==========================================")
+                            print(f"📄 PREVIEW FILE CẦN GHI: '{filepath}' ({role})")
+                            print(f"==========================================")
+                            print(content[:500] + ("\n...[còn tiếp]..." if len(content) > 500 else ""))
+                            print(f"==========================================\n")
+                            
+                            if self.ask_approval(f"Đồng ý cho Agent ghi file: '{filepath}'?"):
+                                res = write_source_file(filepath, content)
+                                status = "SUCCESS" if res == "Ghi file thành công." else "ERROR"
+                                if status == "SUCCESS":
+                                    self.modified_files.add(os.path.abspath(filepath))
+                                observation = format_observation(
+                                    status=status,
+                                    summary=res,
+                                    details=res,
+                                    artifacts=[filepath]
+                                )
+                            else:
+                                observation = format_observation(
+                                    status="ERROR",
+                                    summary="Từ chối ghi file.",
+                                    details="Người dùng từ chối ghi tệp tin lên đĩa cứng."
+                                )
                             
                 elif action_name == "finish_task":
                     finish_msg = parsed_args[0] if len(parsed_args) > 0 else ""
@@ -1361,6 +1530,7 @@ class AIDeveloperHarness:
             "Tuyệt đối KHÔNG ĐƯỢC sửa đổi bất kỳ tệp code production nào (trong Domain, Application, Infrastructure, Controllers).\n"
             "Sau khi viết xong các test cases, hãy chạy `dotnet build` để đảm bảo chúng biên dịch thành công. LƯU Ý: các test cases có thể thất bại khi chạy vì code production chưa được viết.\n"
             "🚨 QUY TẮC BẮT BUỘC: Trước khi viết test cho bất kỳ class nào, bạn PHẢI dùng `read_source` để đọc mã nguồn production của class đó nhằm kiểm tra chính xác namespace, tên class, chữ ký constructor và các phương thức. TUYỆT ĐỐI KHÔNG được tự phán đoán hoặc bịa đặt namespace/chữ ký.\n"
+            "Mẫu cấu trúc test có thể tham khảo từ thư mục [FloraCore.Tests/Application/WebsiteInfo/](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/FloraCore.Tests/Application/WebsiteInfo/).\n"
             "Gọi `finish_task('<báo cáo các file test đã viết>')` khi hoàn thành."
         )
         testwriter_system += architecture_guidelines
@@ -1372,6 +1542,12 @@ class AIDeveloperHarness:
             "Bạn là một Kỹ sư .NET 9 Senior, làm việc trên dự án FloraCore (Clean Architecture + CQRS + MediatR).\n"
             "Nhiệm vụ của bạn là hiện thực hóa logic nghiệp vụ trong các lớp Domain, Application, Infrastructure, Controllers dựa trên Bản kế hoạch (Execution Plan) và vượt qua toàn bộ các test cases đã được viết.\n"
             "Hãy tuân thủ nghiêm ngặt chính sách lập trình (CODING_POLICY.md).\n"
+            "🚨 QUY TẮC PHÁT TRIỂN QUAN TRỌNG:\n"
+            "- Hãy tham chiếu trực tiếp đến các file code mẫu có sẵn để bắt chước cấu trúc thiết kế chuẩn của project:\n"
+            "  * Xem [GenericRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/GenericRepository.cs) làm repository cơ sở.\n"
+            "  * Xem [ProductRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/ProductRepository.cs) và [WebsiteInfoRepository.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Repositories/WebsiteInfoRepository.cs) làm mẫu kế thừa GenericRepository, khai báo Primary Constructors C# 12+ kèm ThrowIfNull check.\n"
+            "  * Xem [UnitOfWork.cs](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Infrastructure/Data/UnitOfWork.cs) làm mẫu cấu trúc UoW.\n"
+            "  * Xem các Handlers trong [Application/Features/WebsiteInfo/Commands](file:///c:/Users/T/.gemini/antigravity/scratch/flora-core/Application/Features/WebsiteInfo/Commands/) làm mẫu viết Command/CommandHandler trong cùng một file kèm Primary Constructor.\n"
             "Bạn được phép đọc tất cả các file và ghi vào các file production code. Tuyệt đối KHÔNG sửa đổi file cấu hình hệ thống (.env) hoặc file harness (`ai_developer_harness.py`).\n"
             "Thường xuyên chạy `dotnet build` và `dotnet test` để kiểm tra tiến trình.\n"
             "Sau khi vượt qua toàn bộ tests và không còn lỗi linter, hãy gọi `finish_task('<báo cáo chi tiết các file đã sửa đổi>')` để gửi cho Evaluator.\n\n"
