@@ -19,6 +19,8 @@ import threading
 import traceback
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -47,7 +49,7 @@ class OutputCapture:
 
     def write(self, text):
         self.buffer += text
-        if len(self.buffer) >= 500 or (text and text[-1] in "\n\r"):
+        if len(self.buffer) >= 2000 or (text and text[-1] in "\n\r" and len(self.buffer) >= 200):
             self.msg_queue.put(("log", self.buffer))
             self.buffer = ""
 
@@ -91,6 +93,31 @@ class TelegramHarness(AIDeveloperHarness):
 # Streaming — đọc queue và gửi message về Telegram
 # ---------------------------------------------------------------------------
 
+async def _safe_send(bot, chat_id: int, text: str, reply_markup=None):
+    """Gửi message với retry khi bị flood ban."""
+    import re as _re
+    for attempt in range(3):
+        try:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                disable_web_page_preview=True,
+                reply_markup=reply_markup,
+            )
+            return
+        except Exception as exc:
+            err = str(exc).lower()
+            if "retry after" in err:
+                m = _re.search(r"retry after\s+(\d+)", err)
+                wait = int(m.group(1)) + 1 if m else 5
+                logger.warning("Flood wait %ds, sleeping...", wait)
+                await asyncio.sleep(wait)
+            elif attempt < 2:
+                await asyncio.sleep(1)
+            else:
+                logger.error("Send failed after 3 retries: %s", exc)
+
+
 async def stream_output(
     chat_id: int,
     msg_queue: queue.Queue,
@@ -98,7 +125,9 @@ async def stream_output(
     chat_data: dict,
     harness_thread: threading.Thread,
 ):
-    """Vòng lặp: đọc queue.Queue → gửi Telegram message."""
+    """Đọc queue.Queue → gửi Telegram message, có rate-limit guard."""
+    MESSAGE_GAP = 0.35  # giây giữa các message để tránh flood ban
+
     while harness_thread.is_alive() or not msg_queue.empty():
         try:
             item = msg_queue.get(timeout=0.5)
@@ -111,13 +140,11 @@ async def stream_output(
         typ, payload = item
         if typ == "log":
             text = payload.strip()
-            if text:
-                for i in range(0, len(text), 4000):
-                    await app.bot.send_message(
-                        chat_id=chat_id,
-                        text=text[i : i + 4000],
-                        disable_web_page_preview=True,
-                    )
+            if not text:
+                continue
+            for i in range(0, len(text), 4000):
+                await _safe_send(app.bot, chat_id=chat_id, text=text[i : i + 4000])
+                await asyncio.sleep(MESSAGE_GAP)
         elif typ == "approval":
             message, _chat_id = payload
             keyboard = InlineKeyboardMarkup([
@@ -127,11 +154,8 @@ async def stream_output(
                 ]
             ])
             chat_data["pending_approval"] = True
-            await app.bot.send_message(
-                chat_id=_chat_id,
-                text=f"🛡️ {message}",
-                reply_markup=keyboard,
-            )
+            await _safe_send(app.bot, chat_id=_chat_id, text=f"🛡️ {message}", reply_markup=keyboard)
+            await asyncio.sleep(MESSAGE_GAP)
 
     chat_data["running"] = False
     chat_data["pending_approval"] = False

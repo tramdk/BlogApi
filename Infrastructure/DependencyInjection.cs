@@ -102,6 +102,7 @@ public static class DependencyInjection
 
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<OutboxProcessor>();
+        services.AddScoped<IInboxService, InboxService>();
 
         // Configure JwtSettings
         services.Configure<JwtSettings>(configuration.GetSection("Jwt"));

@@ -351,13 +351,17 @@ class AIDeveloperHarness:
                 if self.provider == "gemini":
                     from google.genai import types
                     
-                    cache_key = self.current_role
+                    active_model = "gemini-2.5-flash"
+                    if self.current_role == "Developer":
+                        active_model = self.model_name
+                    
+                    cache_key = f"shared_cache_{active_model}"
                     cache_name = self.gemini_caches.get(cache_key)
                     
                     if not cache_name:
                         try:
-                            print(f"⚡ [Harness Gemini Cache]: Đang tạo Context Cache cho vai trò {self.current_role}...")
-                            model_id = self.model_name
+                            print(f"⚡ [Harness Gemini Cache]: Đang tạo Context Cache dùng chung cho model {active_model}...")
+                            model_id = active_model
                             if not model_id.startswith("models/"):
                                 model_id = f"models/{model_id}"
                                 
@@ -367,18 +371,17 @@ class AIDeveloperHarness:
                                 model=model_id,
                                 config=types.CreateCachedContentConfig(
                                     contents=cache_contents,
-                                    system_instruction=system_instruction,
                                     ttl="3600s" # Tăng TTL lên 1 giờ để giữ cache lâu hơn cho các task dài
                                 )
                             )
                             cache_name = cache.name
                             self.gemini_caches[cache_key] = cache_name
-                            print(f"✅ [Harness Gemini Cache]: Đã kích hoạt Cache thành công ({cache_name})")
+                            print(f"✅ [Harness Gemini Cache]: Đã kích hoạt Cache dùng chung thành công ({cache_name})")
                         except Exception as e:
                             print(f"⚠️ [Harness Gemini Cache Warning]: Không tạo được Cache ({e}). Sẽ fallback về chế độ bình thường.")
                             cache_name = None
                     
-                    model_id = self.model_name
+                    model_id = active_model
                     if not model_id.startswith("models/"):
                         model_id = f"models/{model_id}"
     
@@ -388,6 +391,7 @@ class AIDeveloperHarness:
                             contents=prompt,
                             config=types.GenerateContentConfig(
                                 cached_content=cache_name,
+                                system_instruction=system_instruction,
                                 temperature=0.0,
                                 stop_sequences=stop_sequences
                             )
@@ -892,10 +896,45 @@ class AIDeveloperHarness:
         target_chars = 135000  # Đảm bảo chắc chắn vượt 32,768 tokens
         if total_chars < target_chars:
             padding_needed = target_chars - total_chars
-            padding_str = "\n" + "// " + ("=" * 77) + "\n"
-            padding_str += "// GEMINI CONTEXT CACHE PADDING FOR STABILITY\n"
-            padding_str += "// " + ("a" * min(padding_needed - 100, 120000)) + "\n"
-            padding_str += "// " + ("=" * 77) + "\n"
+            # Sử dụng tài liệu hướng dẫn lập trình chuẩn .NET 9 thực tế để "smart padding"
+            smart_guides = [
+                "// ===========================================================================",
+                "// C# 12+ / .NET 9 ENTERPRISE CODING GUIDELINES & BEST PRACTICES",
+                "// ===========================================================================",
+                "// 1. PRIMARY CONSTRUCTORS (C# 12+):",
+                "//    - Bắt buộc dùng Primary Constructor cho tất cả dependencies injection.",
+                "//    - Luôn viết ThrowIfNull check tại vị trí khởi tạo thuộc tính readonly private.",
+                "//    - Ví dụ: public class ProductService(IProductRepository repository) {",
+                "//          private readonly IProductRepository _repository = repository ?? throw new ArgumentNullException(nameof(repository));",
+                "//      }",
+                "// 2. CLEAN ARCHITECTURE PURITY:",
+                "//    - Domain layer không có bất kỳ dependency nào khác ngoài System.",
+                "//    - Application layer chỉ chứa logic nghiệp vụ và interfaces, không phụ thuộc Infrastructure.",
+                "//    - Infrastructure layer chứa EF Core DbContext, Repositories implementations.",
+                "// 3. CQRS PATTERN WITH MEDIATR:",
+                "//    - Đảm bảo Commands và Queries là immutable records.",
+                "//    - Command handler độc lập, viết chung file với Command definition.",
+                "// 4. RESOURCE MANAGER & LOCALIZATION:",
+                "//    - Không hardcode chuỗi thông báo lỗi. Sử dụng ResourceManager để đọc từ file .resx.",
+                "// 5. ASYNCHRONOUS PROGRAMMING:",
+                "//    - Luôn dùng async/await cho I/O tasks. Luôn truyền CancellationToken.",
+                "//    - Không bao giờ dùng .Result hoặc .Wait() để tránh deadlock.",
+                "// 6. OUTBOX PATTERN FOR RELIABILITY:",
+                "//    - Ghi nhận OutboxMessage trong cùng một db transaction với thực thể chính.",
+                "//    - Background processor sẽ xử lý OutboxMessage bất đồng bộ đáng tin cậy.",
+                "// 7. REQUEST IDEMPOTENCY & INBOX PATTERN:",
+                "//    - Sử dụng IdempotencyKey qua IDistributedCache để ngăn chặn trùng lặp API requests.",
+                "//    - Sử dụng InboxMessage trong event consumer để ngăn chặn trùng lặp event processing.",
+                "// ==========================================================================="
+            ]
+            padding_str = "\n" + "\n".join(smart_guides) + "\n"
+            while total_chars + len(padding_str) < target_chars:
+                padding_str += "\n" + "\n".join(smart_guides) + "\n"
+            
+            # Cắt bớt phần dư thừa để khớp chính xác target_chars
+            if total_chars + len(padding_str) > target_chars:
+                excess = (total_chars + len(padding_str)) - target_chars
+                padding_str = padding_str[:-excess] if excess < len(padding_str) else ""
             contents.append(padding_str)
             
         return contents
@@ -1247,7 +1286,12 @@ class AIDeveloperHarness:
 
             loop_warning = ""
             # 1. Phát hiện vòng lặp hành động trùng lặp liên tục
-            if len(self.action_history) >= 3 and self.action_history[-1] == self.action_history[-2] == self.action_history[-3]:
+            if len(self.action_history) >= 4 and self.action_history[-1] == self.action_history[-2] == self.action_history[-3] == self.action_history[-4]:
+                print("\n🚨 [Harness Early Exit]: Phát hiện vòng lặp hành động trùng lặp liên tiếp 4 lần. Dừng Agent để tránh lãng phí token.")
+                rollback_log = self.selective_rollback()
+                print(f"⚠️ Hậu quả Rollback:\n{rollback_log}")
+                return "FAIL: Đã kích hoạt ngắt khẩn cấp do vòng lặp hành động trùng lặp."
+            elif len(self.action_history) >= 3 and self.action_history[-1] == self.action_history[-2] == self.action_history[-3]:
                 loop_warning = (
                     "\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Bạn đang thực hiện chính xác cùng một thao tác liên tục và nhận cùng kết quả/lỗi.\n"
                     "Hãy đổi chiến thuật ngay! Bạn KHÔNG được lặp lại hành động này nữa. Hãy làm một trong các việc sau:\n"
@@ -1265,7 +1309,12 @@ class AIDeveloperHarness:
                     self.write_history[filepath] = []
                 self.write_history[filepath].append(content_hash)
                 
-                if self.write_history[filepath].count(content_hash) >= 2:
+                if self.write_history[filepath].count(content_hash) >= 3:
+                    print(f"\n🚨 [Harness Early Exit]: Phát hiện ghi trùng nội dung vào '{filepath}' 3 lần. Dừng Agent để tránh lãng phí token.")
+                    rollback_log = self.selective_rollback()
+                    print(f"⚠️ Hậu quả Rollback:\n{rollback_log}")
+                    return "FAIL: Đã kích hoạt ngắt khẩn cấp do lặp lại nội dung ghi file."
+                elif self.write_history[filepath].count(content_hash) >= 2:
                     loop_warning = (
                         f"\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Bạn đang ghi đè chính xác cùng một nội dung vào tệp '{filepath}' lần thứ {self.write_history[filepath].count(content_hash)}.\n"
                         "Mã nguồn này đã được áp dụng trước đó và không giúp vượt qua kiểm thử. Bạn KHÔNG được tiếp tục ghi đè nội dung này.\n"
@@ -1329,7 +1378,12 @@ class AIDeveloperHarness:
                                         # Theo dõi lịch sử lỗi test để chống lặp
                                         sorted_errs = sorted(test_errs)
                                         self.test_failure_history.append(sorted_errs)
-                                        if len(self.test_failure_history) >= 3 and self.test_failure_history[-1] == self.test_failure_history[-2] == self.test_failure_history[-3]:
+                                        if len(self.test_failure_history) >= 4 and self.test_failure_history[-1] == self.test_failure_history[-2] == self.test_failure_history[-3] == self.test_failure_history[-4]:
+                                            print("\n🚨 [Harness Early Exit]: Danh sách lỗi test không đổi liên tiếp 4 lần. Dừng Agent để tránh lãng phí token.")
+                                            rollback_log = self.selective_rollback()
+                                            print(f"⚠️ Hậu quả Rollback:\n{rollback_log}")
+                                            return "FAIL: Đã kích hoạt ngắt khẩn cấp do lỗi test không thay đổi."
+                                        elif len(self.test_failure_history) >= 3 and self.test_failure_history[-1] == self.test_failure_history[-2] == self.test_failure_history[-3]:
                                             loop_warning_test = (
                                                 "\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Danh sách test case thất bại hoàn toàn KHÔNG THAY ĐỔI sau 3 lần chạy test liên tiếp.\n"
                                                 "Điều này có nghĩa là các chỉnh sửa mã nguồn gần đây của bạn không có bất kỳ tác dụng nào đối với các lỗi kiểm thử hiện tại.\n"

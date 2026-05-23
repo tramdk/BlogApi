@@ -78,6 +78,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     /// <summary>
+    /// Gets or sets the inbox messages.
+    /// </summary>
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+
+    /// <summary>
     /// Gets or sets the website info.
     /// </summary>
     public DbSet<WebsiteInfo> WebsiteInfos => Set<WebsiteInfo>();
@@ -209,6 +214,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             entity.HasOne(oi => oi.Product)
                 .WithMany()
                 .HasForeignKey(oi => oi.ProductId);
+        });
+
+        builder.Entity<InboxMessage>(entity =>
+        {
+            entity.HasKey(i => i.Id);
+            entity.Property(i => i.EventName).IsRequired();
         });
     }
 }

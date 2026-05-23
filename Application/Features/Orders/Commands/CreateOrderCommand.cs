@@ -9,7 +9,7 @@ using FloraCore.Application.Interfaces;
 
 namespace FloraCore.Application.Features.Orders.Commands;
 
-public record CreateOrderCommand(Guid UserId, Address ShippingAddress) : IRequest<Guid>;
+public record CreateOrderCommand(Guid UserId, Address ShippingAddress, string IdempotencyKey = "") : IRequest<Guid>, IIdempotentCommand;
 
 public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Guid>
 {
