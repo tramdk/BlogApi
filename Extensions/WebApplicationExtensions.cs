@@ -26,7 +26,7 @@ public static class WebApplicationExtensions
         app.UseRouting();
         app.UseCors(CorsConstants.AllowFrontend);
 
-        app.UseMiddleware<SecurityHeadersMiddleware>();
+        app.UseSecurityHeaders(); // Use SecurityHeaders middleware with configuration registered in DI
         app.UseResponseCompression();
         app.UseSerilogRequestLogging();
 
@@ -87,6 +87,13 @@ public static class WebApplicationExtensions
             {
                 Authorization = [new FloraCore.Infrastructure.Security.HangfireDashboardAuthFilter()]
             });
+
+            // Register Hangfire Recurring Jobs
+            var jobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+            jobManager.AddOrUpdate<FloraCore.Infrastructure.Services.OutboxProcessor>(
+                "outbox-processor",
+                processor => processor.ProcessMessagesAsync(),
+                Cron.Minutely());
         }
 
         // SignalR Hubs

@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Asp.Versioning;
+using Microsoft.AspNetCore.Http;
 
 namespace FloraCore.Controllers;
 
@@ -38,7 +39,7 @@ public class AuthController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> Register([FromBody] RegisterCommand command)
     {
         var result = await _mediator.Send(command);
-        return result ? Ok() : BadRequest();
+        return result ? Ok() : BadRequest(new ProblemDetails { Status = StatusCodes.Status400BadRequest, Title = "Registration Failed" });
     }
 
     /// <summary>
@@ -78,11 +79,11 @@ public class AuthController(IMediator mediator) : ControllerBase
         try
         {
             var result = await _mediator.Send(command);
-            return result ? Ok() : BadRequest();
+            return result ? Ok() : BadRequest(new ProblemDetails { Status = StatusCodes.Status400BadRequest, Title = "Change Password Failed" });
         }
         catch (Exception ex)
         {
-            return BadRequest(ex.Message);
+            return BadRequest(new ProblemDetails { Status = StatusCodes.Status400BadRequest, Title = "Change Password Failed", Detail = ex.Message });
         }
     }
 }

@@ -2,24 +2,45 @@ using System;
 using FloraCore.Application.Common.Interfaces;
 using FloraCore.Domain.Entities;
 using FloraCore.Infrastructure.Hubs;
-using FloraCore.Infrastructure.Repositories;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.Tasks;
-
+using Microsoft.Extensions.Logging;
 
 namespace FloraCore.Infrastructure.Services;
 
+/// <summary>
+/// Implementation of <see cref="INotificationService"/> for sending notifications to users.
+/// </summary>
 public class NotificationService : INotificationService
 {
     private readonly IGenericRepository<Notification, Guid> _repository;
     private readonly IHubContext<NotificationHub, INotificationClient> _hubContext;
+    private readonly ILogger<NotificationService> _logger;
 
-    public NotificationService(IGenericRepository<Notification, Guid> repository, IHubContext<NotificationHub, INotificationClient> hubContext)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="NotificationService"/> class.
+    /// </summary>
+    /// <param name="repository">The repository for notifications.</param>
+    /// <param name="hubContext">The hub context for SignalR.</param>
+    /// <param name="logger">The logger.</param>
+    public NotificationService(
+        IGenericRepository<Notification, Guid> repository,
+        IHubContext<NotificationHub, INotificationClient> hubContext,
+        ILogger<NotificationService> logger)
     {
-        _repository = repository;
-        _hubContext = hubContext;
+        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    /// <summary>
+    /// Sends a notification to a specific user.
+    /// </summary>
+    /// <param name="userId">The ID of the user to send the notification to.</param>
+    /// <param name="title">The title of the notification.</param>
+    /// <param name="message">The message of the notification.</param>
+    /// <param name="type">The type of the notification.</param>
+    /// <param name="relatedId">The ID of the related entity (optional).</param>
     public async Task SendNotificationToUser(Guid userId, string title, string message, string type, string? relatedId = null)
     {
         var notification = new Notification
@@ -34,13 +55,35 @@ public class NotificationService : INotificationService
             RelatedId = relatedId
         };
 
-        await _repository.AddAsync(notification);
-
-        await _hubContext.Clients.User(userId.ToString()).ReceiveNotification(title, message, type, relatedId);
+        try
+        {
+            await _repository.AddAsync(notification);
+            await _hubContext.Clients.User(userId.ToString()).ReceiveNotification(title, message, type, relatedId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending notification to user {UserId}", userId);
+            // Consider re-throwing or handling the exception based on your requirements
+        }
     }
 
+    /// <summary>
+    /// Sends a notification to all users.
+    /// </summary>
+    /// <param name="title">The title of the notification.</param>
+    /// <param name="message">The message of the notification.</param>
+    /// <param name="type">The type of the notification.</param>
+    /// <param name="relatedId">The ID of the related entity (optional).</param>
     public async Task SendNotificationToAll(string title, string message, string type, string? relatedId = null)
     {
-        await _hubContext.Clients.All.ReceiveNotification(title, message, type, relatedId);
+        try
+        {
+            await _hubContext.Clients.All.ReceiveNotification(title, message, type, relatedId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending notification to all users.");
+            // Consider re-throwing or handling the exception based on your requirements
+        }
     }
 }

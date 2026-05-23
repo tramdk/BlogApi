@@ -14,10 +14,13 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Polly;
 using Polly.Registry;
-
+using FloraCore.Domain.Exceptions;
 
 namespace FloraCore.Infrastructure.Services;
 
+/// <summary>
+/// Implementation of IFileService using Cloudinary for file storage.
+/// </summary>
 public class CloudinaryFileService : IFileService
 {
     private readonly IGenericRepository<FileMetadata, Guid> _repository;
@@ -25,7 +28,16 @@ public class CloudinaryFileService : IFileService
     private readonly ICurrentUserService _currentUserService;
     private readonly HttpClient _httpClient;
     private readonly ResiliencePipeline _resiliencePipeline;
+    private readonly IOptions<CloudinarySettings> _config;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CloudinaryFileService"/> class.
+    /// </summary>
+    /// <param name="repository">The repository for file metadata.</param>
+    /// <param name="config">The Cloudinary configuration.</param>
+    /// <param name="currentUserService">The current user service.</param>
+    /// <param name="httpClientFactory">The HTTP client factory.</param>
+    /// <param name="pipelineProvider">The resilience pipeline provider.</param>
     public CloudinaryFileService(
         IGenericRepository<FileMetadata, Guid> repository,
         IOptions<CloudinarySettings> config,
@@ -33,19 +45,31 @@ public class CloudinaryFileService : IFileService
         IHttpClientFactory httpClientFactory,
         ResiliencePipelineProvider<string> pipelineProvider)
     {
-        _repository = repository;
-        _currentUserService = currentUserService;
-        var acc = new Account(config.Value.CloudName, config.Value.ApiKey, config.Value.ApiSecret);
+        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
+        _httpClient = httpClientFactory.CreateClient("ResilientClient") ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _resiliencePipeline = pipelineProvider.GetPipeline("external-services") ?? throw new ArgumentNullException(nameof(pipelineProvider));
+
+        var acc = new Account(_config.Value.CloudName, _config.Value.ApiKey, _config.Value.ApiSecret);
         _cloudinary = new Cloudinary(acc);
-        _httpClient = httpClientFactory.CreateClient("ResilientClient");
-        _resiliencePipeline = pipelineProvider.GetPipeline("external-services");
     }
 
+    /// <summary>
+    /// Uploads a file to Cloudinary.
+    /// </summary>
+    /// <param name="file">The file to upload.</param>
+    /// <param name="objectId">The ID of the related object (optional).</param>
+    /// <param name="objectType">The type of the related object (optional).</param>
+    /// <param name="isPublic">Whether the file is public (optional).</param>
+    /// <returns>The file metadata.</returns>
+    /// <exception cref="ArgumentException">Thrown if the file is empty or objectId/objectType is missing.</exception>
+    /// <exception cref="Exception">Thrown if Cloudinary upload fails.</exception>
     public async Task<FileMetadata> UploadFileAsync(IFormFile file, string? objectId = null, string? objectType = null, bool isPublic = true)
     {
-        if (file == null || file.Length == 0) throw new ArgumentException("File is empty");
-        if (string.IsNullOrEmpty(objectId)) throw new ArgumentException("objectId is empty");
-        if (string.IsNullOrEmpty(objectType)) throw new ArgumentException("objectType is empty");
+        if (file == null || file.Length == 0) throw new ArgumentException("File is empty", nameof(file));
+        if (string.IsNullOrEmpty(objectId)) throw new ArgumentException("objectId is empty", nameof(objectId));
+        if (string.IsNullOrEmpty(objectType)) throw new ArgumentException("objectType is empty", nameof(objectType));
 
         var uploadResult = new RawUploadResult();
         using (var stream = file.OpenReadStream())
@@ -53,11 +77,11 @@ public class CloudinaryFileService : IFileService
             var uploadParams = new RawUploadParams
             {
                 File = new FileDescription(file.FileName, stream),
-                Folder = "blog_api",
+                Folder = _config.Value.UploadFolder,
                 PublicId = $"{Guid.NewGuid()}_{Path.GetFileNameWithoutExtension(file.FileName)}"
             };
-            
-            uploadResult = await _resiliencePipeline.ExecuteAsync(async ct => 
+
+            uploadResult = await _resiliencePipeline.ExecuteAsync(async ct =>
                 await _cloudinary.UploadAsync(uploadParams));
         }
 
@@ -85,12 +109,23 @@ public class CloudinaryFileService : IFileService
         return metadata;
     }
 
+    /// <summary>
+    /// Gets files by object ID and type.
+    /// </summary>
+    /// <param name="objectId">The object ID.</param>
+    /// <param name="objectType">The object type.</param>
+    /// <returns>The list of file metadata.</returns>
     public async Task<IEnumerable<FileMetadata>> GetFilesByObjectAsync(string objectId, string objectType)
     {
         var currentUserId = _currentUserService.UserId;
         return await _repository.FindAsync(f => f.ObjectId == objectId && f.ObjectType == objectType && (f.IsPublic || f.UploadedById == currentUserId));
     }
 
+    /// <summary>
+    /// Gets files by object ID.
+    /// </summary>
+    /// <param name="objectId">The object ID.</param>
+    /// <returns>The list of file metadata.</returns>
     public async Task<List<FileMetadata>> GetFilesByObjectIdAsync(string objectId)
     {
         var currentUserId = _currentUserService.UserId;
@@ -108,6 +143,12 @@ public class CloudinaryFileService : IFileService
             .ToListAsync();
     }
 
+    /// <summary>
+    /// Deletes a file from Cloudinary.
+    /// </summary>
+    /// <param name="fileId">The ID of the file to delete.</param>
+    /// <returns>True if the file was deleted successfully, otherwise false.</returns>
+    /// <exception cref="UnauthorizedAccessException">Thrown if the user is not authorized to delete the file.</exception>
     public async Task<bool> DeleteFileAsync(Guid fileId)
     {
         var metadata = await _repository.GetByIdAsync(fileId);
@@ -119,7 +160,7 @@ public class CloudinaryFileService : IFileService
         try
         {
             var deletionParams = new DeletionParams(metadata.PublicId ?? metadata.StoredName);
-            await _resiliencePipeline.ExecuteAsync(async ct => 
+            await _resiliencePipeline.ExecuteAsync(async ct =>
                 await _cloudinary.DestroyAsync(deletionParams));
         }
         catch (Exception)
@@ -131,6 +172,13 @@ public class CloudinaryFileService : IFileService
         return true;
     }
 
+    /// <summary>
+    /// Downloads a file from Cloudinary.
+    /// </summary>
+    /// <param name="fileId">The ID of the file to download.</param>
+    /// <returns>The file bytes, content type, and file name.</returns>
+    /// <exception cref="FileNotFoundException">Thrown if the file metadata is not found.</exception>
+    /// <exception cref="UnauthorizedAccessException">Thrown if the user is not authorized to access the file.</exception>
     public async Task<(byte[] Bytes, string ContentType, string FileName)> DownloadFileAsync(Guid fileId)
     {
         var metadata = await _repository.GetByIdAsync(fileId);
@@ -140,11 +188,26 @@ public class CloudinaryFileService : IFileService
             throw new UnauthorizedAccessException("You are not authorized to access this private file.");
 
         var fileUrl = metadata.Url ?? metadata.FilePath;
-        var bytes = await _httpClient.GetByteArrayAsync(fileUrl);
-        
+        byte[] bytes;
+        try
+        {
+            bytes = await _httpClient.GetByteArrayAsync(fileUrl);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new FileNotFoundException("File not found at URL: " + fileUrl, ex);
+        }
+
         return (bytes, metadata.ContentType, metadata.FileName);
     }
 
+    /// <summary>
+    /// Downloads a file from Cloudinary by object ID.
+    /// </summary>
+    /// <param name="objectId">The object ID.</param>
+    /// <returns>The file bytes, content type, and file name.</returns>
+    /// <exception cref="FileNotFoundException">Thrown if no database entry is found for the object ID.</exception>
+    /// <exception cref="UnauthorizedAccessException">Thrown if the user is not authorized to access the file.</exception>
     public async Task<(byte[] Bytes, string ContentType, string FileName)> DownloadFileByObjectIdAsync(string objectId)
     {
         var files = await _repository.FindAsync(f => f.ObjectId == objectId);
@@ -157,7 +220,15 @@ public class CloudinaryFileService : IFileService
             throw new UnauthorizedAccessException("You are not authorized to access this private file.");
 
         var fileUrl = metadata.Url ?? metadata.FilePath;
-        var bytes = await _httpClient.GetByteArrayAsync(fileUrl);
+        byte[] bytes;
+        try
+        {
+            bytes = await _httpClient.GetByteArrayAsync(fileUrl);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new FileNotFoundException("File not found at URL: " + fileUrl, ex);
+        }
 
         return (bytes, metadata.ContentType, metadata.FileName);
     }

@@ -3,9 +3,10 @@ using FloraCore.Application.Common.Extensions;
 using FloraCore.Extensions;
 using FloraCore.Infrastructure;
 using FloraCore.Infrastructure.Data;
-using Hangfire;
 using Serilog;
 using Asp.Versioning;
+using FloraCore.Middleware;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -48,6 +49,7 @@ builder.Services.AddOpenApiDocumentation();
 builder.Services.AddAppHealthChecks(builder.Configuration);
 builder.Services.AddAppResponseCompression();
 builder.Services.AddAppResilience();
+builder.Services.AddSecurityHeaders(builder.Configuration); // Add Security Headers Configuration
 
 // Add API Versioning
 builder.Services.AddApiVersioning(options =>
@@ -81,16 +83,6 @@ if (app.Environment.IsDevelopment() || Environment.GetEnvironmentVariable("SEED_
 }
 
 await DatabaseSeederExtensions.SyncTokenBlacklistAsync(app);
-
-// ========== Hangfire Recurring Jobs ==========
-if (!app.Environment.IsEnvironment("Testing"))
-{
-    var jobManager = app.Services.GetRequiredService<IRecurringJobManager>();
-    jobManager.AddOrUpdate<FloraCore.Infrastructure.Services.OutboxProcessor>(
-        "outbox-processor",
-        processor => processor.ProcessMessagesAsync(),
-        Cron.Minutely());
-}
 
 app.Run();
 

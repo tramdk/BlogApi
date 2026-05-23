@@ -16,21 +16,24 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using OpenTelemetry.Resources;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Http.Resilience;
+using Polly.Registry;
 
 namespace FloraCore.Infrastructure;
 
 /// <summary>
-/// Lớp mở rộng chứa các phương thức đăng ký dịch vụ của tầng Infrastructure vào DI Container.
+/// Extension methods for IServiceCollection to register infrastructure services.
 /// </summary>
 public static class DependencyInjection
 {
     /// <summary>
-    /// Đăng ký các dịch vụ cốt lõi của tầng Infrastructure bao gồm Database, Identity, Repositories và Services.
+    /// Adds core infrastructure services including database, identity, repositories, and services.
     /// </summary>
-    /// <param name="services">DI container của ứng dụng.</param>
-    /// <param name="configuration">Cấu hình hệ thống.</param>
-    /// <returns>Trả về <see cref="IServiceCollection"/> để tiếp tục chuỗi đăng ký.</returns>
-    /// <exception cref="ArgumentNullException">Ném ra nếu services hoặc configuration bị null.</exception>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">The configuration.</param>
+    /// <returns>The modified service collection.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if services or configuration is null.</exception>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -50,8 +53,8 @@ public static class DependencyInjection
             {
                 options.UseSqlServer(connectionString);
             }
-            
-            options.ConfigureWarnings(warnings => 
+
+            options.ConfigureWarnings(warnings =>
                 warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
 
@@ -64,7 +67,7 @@ public static class DependencyInjection
         services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IWebsiteInfoRepository, WebsiteInfoRepository>();
-        
+
         // Register IPostQueryDialect strategy dynamically based on DatabaseProvider
         if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
         {
@@ -85,8 +88,8 @@ public static class DependencyInjection
         services.AddSingleton<IDateTimeService, DateTimeService>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<ITokenBlacklistService, TokenBlacklistService>();
-        
-        #pragma warning disable EXTEXP0018
+
+#pragma warning disable EXTEXP0018
         services.AddHybridCache(options =>
         {
             options.DefaultEntryOptions = new HybridCacheEntryOptions
@@ -94,22 +97,46 @@ public static class DependencyInjection
                 Expiration = TimeSpan.FromMinutes(5)
             };
         });
-        #pragma warning restore EXTEXP0018
-        
+#pragma warning restore EXTEXP0018
+
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<OutboxProcessor>();
-        services.AddScoped<IFileService, CloudinaryFileService>();
+
+        // Configure JwtSettings
+        services.Configure<JwtSettings>(configuration.GetSection("Jwt"));
+
+        // Configure Cloudinary
+        services.Configure<CloudinarySettings>(configuration.GetSection("Cloudinary"));
+
+        // Register CloudinaryFileService with IOptions
+        services.AddScoped<IFileService, CloudinaryFileService>(sp =>
+        {
+            var repository = sp.GetRequiredService<IGenericRepository<FileMetadata, Guid>>();
+            var config = sp.GetRequiredService<IOptions<CloudinarySettings>>();
+            var currentUserService = sp.GetRequiredService<ICurrentUserService>();
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var pipelineProvider = sp.GetRequiredService<ResiliencePipelineProvider<string>>();
+
+            return new CloudinaryFileService(
+                repository,
+                config,
+                currentUserService,
+                httpClientFactory,
+                pipelineProvider
+            );
+        });
+
         services.AddScoped<IChatService, ChatService>();
 
         return services;
     }
 
     /// <summary>
-    /// Đăng ký các dịch vụ liên quan đến SignalR phục vụ truyền thông thời gian thực.
+    /// Adds SignalR services for real-time communication.
     /// </summary>
-    /// <param name="services">DI container của ứng dụng.</param>
-    /// <returns>Trả về <see cref="IServiceCollection"/> để tiếp tục chuỗi đăng ký.</returns>
-    /// <exception cref="ArgumentNullException">Ném ra nếu services bị null.</exception>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The modified service collection.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if services is null.</exception>
     public static IServiceCollection AddSignalRServices(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -120,12 +147,12 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Đăng ký và cấu hình hệ thống giám sát OpenTelemetry sử dụng mô hình Strongly-typed Configuration.
+    /// Configures OpenTelemetry for monitoring and tracing.
     /// </summary>
-    /// <param name="services">DI container của ứng dụng.</param>
-    /// <param name="configuration">Cấu hình hệ thống.</param>
-    /// <returns>Trả về <see cref="IServiceCollection"/> để tiếp tục chuỗi đăng ký.</returns>
-    /// <exception cref="ArgumentNullException">Ném ra nếu services hoặc configuration bị null.</exception>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">The configuration.</param>
+    /// <returns>The modified service collection.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if services or configuration is null.</exception>
     public static IServiceCollection AddObservability(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -188,12 +215,12 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Đăng ký và cấu hình Hangfire phục vụ các tác vụ chạy ngầm định kỳ.
+    /// Configures Hangfire for background task processing.
     /// </summary>
-    /// <param name="services">DI container của ứng dụng.</param>
-    /// <param name="configuration">Cấu hình hệ thống.</param>
-    /// <returns>Trả về <see cref="IServiceCollection"/> để tiếp tục chuỗi đăng ký.</returns>
-    /// <exception cref="ArgumentNullException">Ném ra nếu services hoặc configuration bị null.</exception>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">The configuration.</param>
+    /// <returns>The modified service collection.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if services or configuration is null.</exception>
     public static IServiceCollection AddBackgroundTasks(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);

@@ -15,81 +15,93 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
     protected readonly AppDbContext _context;
     protected readonly DbSet<TEntity> _dbSet;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GenericRepository{TEntity, TKey}"/> class.
+    /// </summary>
+    /// <param name="context">The application database context.</param>
     public GenericRepository(AppDbContext context)
     {
-        _context = context;
+        _context = context ?? throw new ArgumentNullException(nameof(context));
         _dbSet = context.Set<TEntity>();
     }
 
     // ========== Basic CRUD Operations ==========
 
+    /// <inheritdoc />
     public virtual async Task<TEntity?> GetByIdAsync(TKey id)
     {
         return await _dbSet.FindAsync(id);
     }
 
+    /// <inheritdoc />
     [Obsolete("Avoid using GetAllAsync() in production — it loads the entire table. Use GetWithOptionsAsync() with pagination.")]
     public virtual async Task<IEnumerable<TEntity>> GetAllAsync()
     {
-        return await _dbSet.ToListAsync();
+        return await _dbSet.AsNoTracking().ToListAsync();
     }
 
+    /// <inheritdoc />
     public virtual async Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate)
     {
-        return await _dbSet.Where(predicate).ToListAsync();
+        return await _dbSet.AsNoTracking().Where(predicate).ToListAsync();
     }
 
+    /// <inheritdoc />
     public virtual async Task AddAsync(TEntity entity)
     {
         await _dbSet.AddAsync(entity);
         await _context.SaveChangesAsync();
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public virtual async Task StageAddAsync(TEntity entity)
     {
         await _dbSet.AddAsync(entity);
         // No SaveChanges — caller must use IUnitOfWork.SaveChangesAsync()
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public virtual async Task StageAddRangeAsync(IEnumerable<TEntity> entities)
     {
         await _dbSet.AddRangeAsync(entities);
         // No SaveChanges — caller must use IUnitOfWork.SaveChangesAsync()
     }
 
+    /// <inheritdoc />
     public virtual async Task UpdateAsync(TEntity entity)
     {
         _dbSet.Update(entity);
         await _context.SaveChangesAsync();
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public virtual void StageUpdate(TEntity entity)
     {
         _dbSet.Update(entity);
         // No SaveChanges — caller must use IUnitOfWork.SaveChangesAsync()
     }
 
+    /// <inheritdoc />
     public virtual async Task DeleteAsync(TEntity entity)
     {
         _dbSet.Remove(entity);
         await _context.SaveChangesAsync();
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public virtual void StageDelete(TEntity entity)
     {
         _dbSet.Remove(entity);
         // No SaveChanges — caller must use IUnitOfWork.SaveChangesAsync()
     }
 
+    /// <inheritdoc />
     public IQueryable<TEntity> GetQueryable()
     {
         return _dbSet.AsQueryable();
     }
 
+    /// <inheritdoc />
     public IQueryable<TEntity> GetQueryable(QueryOptions<TEntity> options)
     {
         return ApplyQueryOptions(_dbSet.AsQueryable(), options);
@@ -97,18 +109,21 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
 
     // ========== Advanced Query Operations ==========
 
+    /// <inheritdoc />
     public virtual async Task<IEnumerable<TEntity>> GetWithOptionsAsync(QueryOptions<TEntity> options)
     {
         var query = ApplyQueryOptions(_dbSet.AsQueryable(), options);
         return await query.ToListAsync();
     }
 
+    /// <inheritdoc />
     public virtual async Task<TEntity?> GetSingleWithOptionsAsync(QueryOptions<TEntity> options)
     {
         var query = ApplyQueryOptions(_dbSet.AsQueryable(), options);
         return await query.FirstOrDefaultAsync();
     }
 
+    /// <inheritdoc />
     public virtual async Task<PagedResult<TEntity>> GetPagedAsync(QueryOptions<TEntity> options)
     {
         var query = _dbSet.AsQueryable();
@@ -136,6 +151,7 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
         return new PagedResult<TEntity>(items, totalCount, pageNumber, pageSize);
     }
 
+    /// <inheritdoc />
     public virtual async Task<int> CountAsync(Expression<Func<TEntity, bool>>? filter = null)
     {
         if (filter == null)
@@ -146,11 +162,13 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
         return await _dbSet.CountAsync(filter);
     }
 
+    /// <inheritdoc />
     public virtual async Task<bool> AnyAsync(Expression<Func<TEntity, bool>> filter)
     {
         return await _dbSet.AnyAsync(filter);
     }
 
+    /// <inheritdoc />
     public virtual async Task<TEntity?> FirstOrDefaultAsync(Expression<Func<TEntity, bool>> filter)
     {
         return await _dbSet.FirstOrDefaultAsync(filter);
@@ -194,6 +212,10 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
         if (options.AsNoTracking)
         {
             query = query.AsNoTracking();
+        }
+        else
+        {
+            query = query.AsNoTracking(); // Apply AsNoTracking by default
         }
 
         // Apply split query

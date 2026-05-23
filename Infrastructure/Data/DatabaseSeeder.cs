@@ -200,6 +200,24 @@ public class DatabaseSeeder
                 Id = "wedding-trends",
                 Name = "Xu hướng",
                 CreatedAt = DateTime.UtcNow
+            },
+            new PostCategory
+            {
+                Id = "blog",
+                Name = "Blog",
+                CreatedAt = DateTime.UtcNow
+            },
+            new PostCategory
+            {
+                Id = "feedback",
+                Name = "Feedback",
+                CreatedAt = DateTime.UtcNow
+            },
+            new PostCategory
+            {
+                Id = "intro",
+                Name = "Giới thiệu",
+                CreatedAt = DateTime.UtcNow
             }
         );
         await _context.SaveChangesAsync();
