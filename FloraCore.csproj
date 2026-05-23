@@ -6,7 +6,7 @@
     <RootNamespace>FloraCore</RootNamespace>
     <DefaultItemExcludes>$(DefaultItemExcludes);FloraCore.Tests\**</DefaultItemExcludes>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);1591</NoWarn>
+    <NoWarn>$(NoWarn);1591;DAP005</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
