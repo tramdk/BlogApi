@@ -7,14 +7,9 @@ using MediatR;
 
 namespace FloraCore.Application.Features.WebsiteInfo.Commands;
 
-public class UpdateWebsiteInfoCommandHandler : IRequestHandler<UpdateWebsiteInfoCommand>
+public class UpdateWebsiteInfoCommandHandler(IWebsiteInfoRepository repository) : IRequestHandler<UpdateWebsiteInfoCommand>
 {
-    private readonly IWebsiteInfoRepository _repository;
-
-    public UpdateWebsiteInfoCommandHandler(IWebsiteInfoRepository repository)
-    {
-        _repository = repository;
-    }
+    private readonly IWebsiteInfoRepository _repository = repository ?? throw new ArgumentNullException(nameof(repository));
 
     public async Task Handle(UpdateWebsiteInfoCommand request, CancellationToken cancellationToken)
     {

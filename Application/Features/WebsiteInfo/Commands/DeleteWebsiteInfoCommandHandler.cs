@@ -7,14 +7,9 @@ using MediatR;
 
 namespace FloraCore.Application.Features.WebsiteInfo.Commands;
 
-public class DeleteWebsiteInfoCommandHandler : IRequestHandler<DeleteWebsiteInfoCommand>
+public class DeleteWebsiteInfoCommandHandler(IWebsiteInfoRepository repository) : IRequestHandler<DeleteWebsiteInfoCommand>
 {
-    private readonly IWebsiteInfoRepository _repository;
-
-    public DeleteWebsiteInfoCommandHandler(IWebsiteInfoRepository repository)
-    {
-        _repository = repository;
-    }
+    private readonly IWebsiteInfoRepository _repository = repository ?? throw new ArgumentNullException(nameof(repository));
 
     public async Task Handle(DeleteWebsiteInfoCommand request, CancellationToken cancellationToken)
     {

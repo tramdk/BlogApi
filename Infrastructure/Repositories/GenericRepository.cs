@@ -10,20 +10,10 @@ namespace FloraCore.Infrastructure.Repositories;
 /// Generic repository implementation.
 /// This class implements the IGenericRepository interface defined in the Application layer.
 /// </summary>
-public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey> where TEntity : class
+public class GenericRepository<TEntity, TKey>(AppDbContext context) : IGenericRepository<TEntity, TKey> where TEntity : class
 {
-    protected readonly AppDbContext _context;
-    protected readonly DbSet<TEntity> _dbSet;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="GenericRepository{TEntity, TKey}"/> class.
-    /// </summary>
-    /// <param name="context">The application database context.</param>
-    public GenericRepository(AppDbContext context)
-    {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
-        _dbSet = context.Set<TEntity>();
-    }
+    protected readonly AppDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
+    protected readonly DbSet<TEntity> _dbSet = context.Set<TEntity>();
 
     // ========== Basic CRUD Operations ==========
 
@@ -93,6 +83,38 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
     {
         _dbSet.Remove(entity);
         // No SaveChanges — caller must use IUnitOfWork.SaveChangesAsync()
+    }
+
+    /// <inheritdoc />
+    public virtual async Task DeleteAsync(TKey id)
+    {
+        var entity = await GetByIdAsync(id);
+        if (entity != null)
+        {
+            await DeleteAsync(entity);
+        }
+    }
+
+    /// <inheritdoc />
+    public virtual void StageDelete(TKey id)
+    {
+        var entity = _dbSet.Local.Cast<object>().FirstOrDefault(e => {
+            var entry = _context.Entry(e);
+            var key = entry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
+            return key != null && entry.Property(key.Name).CurrentValue!.Equals(id);
+        }) as TEntity;
+
+        if (entity == null)
+        {
+            entity = Activator.CreateInstance<TEntity>();
+            var key = _context.Model.FindEntityType(typeof(TEntity))?.FindPrimaryKey()?.Properties.FirstOrDefault();
+            if (key != null)
+            {
+                _context.Entry(entity).Property(key.Name).CurrentValue = id!;
+            }
+            _dbSet.Attach(entity);
+        }
+        _dbSet.Remove(entity);
     }
 
     /// <inheritdoc />
@@ -212,10 +234,6 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
         if (options.AsNoTracking)
         {
             query = query.AsNoTracking();
-        }
-        else
-        {
-            query = query.AsNoTracking(); // Apply AsNoTracking by default
         }
 
         // Apply split query

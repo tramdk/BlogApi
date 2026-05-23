@@ -1,15 +1,12 @@
 using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using FloraCore.Application.Common.Interfaces;
 using FloraCore.Domain.Entities;
 
 namespace FloraCore.Application.Interfaces;
 
-public interface IWebsiteInfoRepository
+/// <summary>
+/// Interface for WebsiteInfo repository, inheriting common CRUD operations from IGenericRepository.
+/// </summary>
+public interface IWebsiteInfoRepository : IGenericRepository<WebsiteInfo, Guid>
 {
-    Task<WebsiteInfo?> GetByIdAsync(Guid id);
-    Task<IEnumerable<WebsiteInfo>> GetAllAsync();
-    Task<Guid> AddAsync(WebsiteInfo websiteInfo);
-    Task UpdateAsync(WebsiteInfo websiteInfo);
-    Task DeleteAsync(Guid id);
 }

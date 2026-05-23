@@ -4,40 +4,29 @@ using System.Threading.Tasks;
 using FloraCore.Application.Interfaces;
 using FloraCore.Domain.Entities;
 using FloraCore.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace FloraCore.Infrastructure.Repositories;
 
 /// <summary>
-/// Implementation of <see cref="IWebsiteInfoRepository"/> for managing website information in the database.
+/// Implementation of <see cref="IWebsiteInfoRepository"/> inheriting from <see cref="GenericRepository{TEntity, TKey}"/>.
+/// Overrides base CRUD methods to preserve custom logging behavior.
 /// </summary>
-public class WebsiteInfoRepository : IWebsiteInfoRepository
+public class WebsiteInfoRepository(AppDbContext context, ILogger<WebsiteInfoRepository> logger) 
+    : GenericRepository<WebsiteInfo, Guid>(context), IWebsiteInfoRepository
 {
-    private readonly AppDbContext _context;
-    private readonly ILogger<WebsiteInfoRepository> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="WebsiteInfoRepository"/> class.
-    /// </summary>
-    /// <param name="context">The application database context.</param>
-    /// <param name="logger">The logger.</param>
-    public WebsiteInfoRepository(AppDbContext context, ILogger<WebsiteInfoRepository> logger)
-    {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+    private readonly ILogger<WebsiteInfoRepository> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
     /// Gets website information by ID.
     /// </summary>
     /// <param name="id">The ID of the website information.</param>
     /// <returns>The website information, or null if not found.</returns>
-    public async Task<WebsiteInfo?> GetByIdAsync(Guid id)
+    public override async Task<WebsiteInfo?> GetByIdAsync(Guid id)
     {
         try
         {
-            return await _context.WebsiteInfos.FindAsync(id);
+            return await base.GetByIdAsync(id);
         }
         catch (Exception ex)
         {
@@ -50,11 +39,12 @@ public class WebsiteInfoRepository : IWebsiteInfoRepository
     /// Gets all website information.
     /// </summary>
     /// <returns>A list of website information.</returns>
-    public async Task<IEnumerable<WebsiteInfo>> GetAllAsync()
+    [Obsolete("Avoid using GetAllAsync() in production — it loads the entire table. Use GetWithOptionsAsync() with pagination.")]
+    public override async Task<IEnumerable<WebsiteInfo>> GetAllAsync()
     {
         try
         {
-            return await _context.WebsiteInfos.ToListAsync();
+            return await base.GetAllAsync();
         }
         catch (Exception ex)
         {
@@ -67,15 +57,12 @@ public class WebsiteInfoRepository : IWebsiteInfoRepository
     /// Adds new website information to the database.
     /// </summary>
     /// <param name="websiteInfo">The website information to add.</param>
-    /// <returns>The ID of the newly added website information.</returns>
-    public async Task<Guid> AddAsync(WebsiteInfo websiteInfo)
+    public override async Task AddAsync(WebsiteInfo websiteInfo)
     {
         ArgumentNullException.ThrowIfNull(websiteInfo);
         try
         {
-            await _context.WebsiteInfos.AddAsync(websiteInfo);
-            await _context.SaveChangesAsync();
-            return websiteInfo.Id;
+            await base.AddAsync(websiteInfo);
         }
         catch (Exception ex)
         {
@@ -88,13 +75,12 @@ public class WebsiteInfoRepository : IWebsiteInfoRepository
     /// Updates existing website information in the database.
     /// </summary>
     /// <param name="websiteInfo">The website information to update.</param>
-    public async Task UpdateAsync(WebsiteInfo websiteInfo)
+    public override async Task UpdateAsync(WebsiteInfo websiteInfo)
     {
         ArgumentNullException.ThrowIfNull(websiteInfo);
         try
         {
-            _context.WebsiteInfos.Update(websiteInfo);
-            await _context.SaveChangesAsync();
+            await base.UpdateAsync(websiteInfo);
         }
         catch (Exception ex)
         {
@@ -104,19 +90,14 @@ public class WebsiteInfoRepository : IWebsiteInfoRepository
     }
 
     /// <summary>
-    /// Deletes website information from the database.
+    /// Deletes website information from the database by ID.
     /// </summary>
     /// <param name="id">The ID of the website information to delete.</param>
-    public async Task DeleteAsync(Guid id)
+    public override async Task DeleteAsync(Guid id)
     {
         try
         {
-            var entity = await GetByIdAsync(id);
-            if (entity != null)
-            {
-                _context.WebsiteInfos.Remove(entity);
-                await _context.SaveChangesAsync();
-            }
+            await base.DeleteAsync(id);
         }
         catch (Exception ex)
         {

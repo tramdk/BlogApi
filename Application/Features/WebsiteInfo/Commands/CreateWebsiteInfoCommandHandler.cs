@@ -7,14 +7,9 @@ using MediatR;
 
 namespace FloraCore.Application.Features.WebsiteInfo.Commands;
 
-public class CreateWebsiteInfoCommandHandler : IRequestHandler<CreateWebsiteInfoCommand, Guid>
+public class CreateWebsiteInfoCommandHandler(IWebsiteInfoRepository repository) : IRequestHandler<CreateWebsiteInfoCommand, Guid>
 {
-    private readonly IWebsiteInfoRepository _repository;
-
-    public CreateWebsiteInfoCommandHandler(IWebsiteInfoRepository repository)
-    {
-        _repository = repository;
-    }
+    private readonly IWebsiteInfoRepository _repository = repository ?? throw new ArgumentNullException(nameof(repository));
 
     public async Task<Guid> Handle(CreateWebsiteInfoCommand request, CancellationToken cancellationToken)
     {
@@ -37,6 +32,7 @@ public class CreateWebsiteInfoCommandHandler : IRequestHandler<CreateWebsiteInfo
             UpdatedAt = DateTime.UtcNow
         };
 
-        return await _repository.AddAsync(websiteInfo);
+        await _repository.AddAsync(websiteInfo);
+        return websiteInfo.Id;
     }
 }

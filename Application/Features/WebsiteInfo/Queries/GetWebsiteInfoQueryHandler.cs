@@ -6,14 +6,9 @@ using MediatR;
 
 namespace FloraCore.Application.Features.WebsiteInfo.Queries;
 
-public class GetWebsiteInfoQueryHandler : IRequestHandler<GetWebsiteInfoQuery, FloraCore.Domain.Entities.WebsiteInfo?>
+public class GetWebsiteInfoQueryHandler(IWebsiteInfoRepository repository) : IRequestHandler<GetWebsiteInfoQuery, FloraCore.Domain.Entities.WebsiteInfo?>
 {
-    private readonly IWebsiteInfoRepository _repository;
-
-    public GetWebsiteInfoQueryHandler(IWebsiteInfoRepository repository)
-    {
-        _repository = repository;
-    }
+    private readonly IWebsiteInfoRepository _repository = repository ?? throw new ArgumentNullException(nameof(repository));
 
     public async Task<FloraCore.Domain.Entities.WebsiteInfo?> Handle(GetWebsiteInfoQuery request, CancellationToken cancellationToken)
     {
