@@ -272,11 +272,11 @@ class AIDeveloperHarness:
         # Tự động nạp bài học tự động (harness_lessons.md) nếu có
         self.lessons_content = ""
         try:
-            lessons_path = os.path.join(root_dir, "docs", "guides", "harness_lessons.md")
+            lessons_path = os.path.join(script_dir, "harness_lessons.md")
             if os.path.exists(lessons_path):
                 with open(lessons_path, "r", encoding="utf-8") as lf:
                     self.lessons_content = lf.read()
-                print(f"📖 [Harness Control]: Đang nạp bài học tự động từ 'docs/guides/harness_lessons.md'...")
+                print(f"📖 [Harness Control]: Đang nạp bài học tự động từ 'scripts/harness_lessons.md'...")
         except Exception as e:
             print(f"⚠️ [Harness Control]: Lỗi đọc lessons file: {e}")
 
@@ -780,70 +780,7 @@ class AIDeveloperHarness:
         except Exception as e:
             return f"Lỗi trong quá trình selective rollback: {str(e)}"
 
-    def distill_and_persist_lessons(self, task_description: str) -> None:
-        """Chưng cất bài học từ log thực thi và ghi vào docs/guides/harness_lessons.md."""
-        print("\n🧠 [Harness Distillation]: Đang chưng cất bài học từ phiên thực thi...")
 
-        # Đọc log thực thi của phiên hiện tại
-        log_content = ""
-        try:
-            with open(self.log_file, "r", encoding="utf-8") as f:
-                log_content = f.read()
-        except Exception:
-            log_content = "(Không thể đọc log file)"
-
-        distillation_prompt = (
-            f"Task gốc: {task_description}\n\n"
-            f"Log thực thi harness (lỗi biên dịch, test failures, cách khắc phục):\n"
-            f"```\n{log_content[:6000]}\n```\n\n"
-            "Hãy phân tích log trên và rút ra các bài học (lessons learned) dưới dạng Markdown.\n"
-            "Tập trung vào:\n"
-            "1. Các lỗi biên dịch C# và test failures đã gặp phải.\n"
-            "2. Cách khắc phục hoặc giải quyết từng lỗi.\n"
-            "3. Nguyên tắc/guidelines chung để tránh lặp lại những lỗi này trong tương lai.\n"
-            "Nếu không có lỗi nào, hãy ghi nhận rằng phiên chạy thành công suôn sẻ.\n"
-            "Viết ngắn gọn, trực tiếp, bằng tiếng Việt. Bắt đầu trực tiếp với nội dung, không mào đầu."
-        )
-
-        distillation_system = (
-            "Bạn là một kỹ sư phần mềm giàu kinh nghiệm chuyên phân tích log thực thi "
-            "và chưng cất bài học lập trình từ các lỗi đã gặp. "
-            "Hãy đưa ra các guidelines có thể áp dụng lại trong tương lai."
-        )
-
-        if self.mock_mode:
-            result = (
-                "## Bài học tự động từ phiên thực thi\n\n"
-                "### Tổng quan\n"
-                "- Phiên chạy mock: không phát hiện lỗi biên dịch hay test failure.\n"
-                "- Toàn bộ pipeline hoàn thành thành công.\n\n"
-                "### Khuyến nghị\n"
-                "- Duy trì cấu trúc Clean Architecture hiện tại.\n"
-                "- Tiếp tục áp dụng TDD (test trước, code sau).\n"
-                "- Kiểm tra build và test thường xuyên (dotnet build / dotnet test).\n"
-            )
-        else:
-            try:
-                result = self.call_llm(distillation_prompt, distillation_system)
-            except Exception as e:
-                print(f"⚠️ [Harness Distillation Warning]: Lỗi khi gọi LLM distillation: {e}")
-                result = (
-                    "## Bài học tự động (Không thể chưng cất)\n\n"
-                    f"Không thể gọi LLM để phân tích log. Lỗi: {e}\n"
-                    "Vui lòng chạy lại harness với API key hợp lệ."
-                )
-
-        lessons_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "docs", "guides"
-        )
-        os.makedirs(lessons_dir, exist_ok=True)
-        lessons_path = os.path.join(lessons_dir, "harness_lessons.md")
-
-        with open(lessons_path, "w", encoding="utf-8") as f:
-            f.write(result)
-
-        print(f"💾 [Harness Distillation]: Đã ghi bài học vào 'docs/guides/harness_lessons.md'")
 
     def generate_directory_tree(self) -> str:
         """Tự động quét cấu trúc thư mục dự án và tạo sơ đồ dạng cây để Agent hiểu kiến trúc và tránh sai đường dẫn."""
@@ -915,7 +852,7 @@ class AIDeveloperHarness:
                 pass
             
         # 1c. Harness Lessons Learned (Tự học & Đúc kết kinh nghiệm)
-        lessons_path = os.path.join(root_dir, "docs", "guides", "harness_lessons.md")
+        lessons_path = os.path.join(script_dir, "harness_lessons.md")
         if os.path.exists(lessons_path):
             try:
                 with open(lessons_path, "r", encoding="utf-8") as lf:
@@ -1020,10 +957,7 @@ class AIDeveloperHarness:
         print("\n🧠 [Harness Distiller]: Đang phân tích log và tự động đúc kết bài học kinh nghiệm cho các lần chạy sau...")
         
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        root_dir = os.path.dirname(script_dir)
-        lessons_dir = os.path.join(root_dir, "docs", "guides")
-        os.makedirs(lessons_dir, exist_ok=True)
-        lessons_path = os.path.join(lessons_dir, "harness_lessons.md")
+        lessons_path = os.path.join(script_dir, "harness_lessons.md")
         
         # 1. Đọc nội dung cũ nếu có
         existing_lessons = ""
@@ -1122,7 +1056,7 @@ class AIDeveloperHarness:
         try:
             with open(lessons_path, "w", encoding="utf-8") as lf:
                 lf.write(cleaned_lessons)
-            print(f"💾 [Harness Distiller Success]: Đã tự động đúc kết kinh nghiệm và cập nhật vào: docs/guides/harness_lessons.md")
+            print(f"💾 [Harness Distiller Success]: Đã tự động đúc kết kinh nghiệm và cập nhật vào: scripts/harness_lessons.md")
         except Exception as e:
             print(f"⚠️ [Harness Distiller Error]: Không thể lưu file bài học kinh nghiệm: {e}")
 
@@ -1598,7 +1532,7 @@ class AIDeveloperHarness:
         if self.policy_content:
             planner_system += f"\n\n--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
         if self.lessons_content:
-            planner_system += f"\n\n--- BÀI HỌC TỰ ĐỘNG (docs/guides/harness_lessons.md) ---\n{self.lessons_content}"
+            planner_system += f"\n\n--- BÀI HỌC TỰ ĐỘNG (scripts/harness_lessons.md) ---\n{self.lessons_content}"
         planner_system += react_instruction
 
         testwriter_system = (
@@ -1615,7 +1549,7 @@ class AIDeveloperHarness:
         if self.policy_content:
             testwriter_system += f"\n\n--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
         if self.lessons_content:
-            testwriter_system += f"\n\n--- BÀI HỌC TỰ ĐỘNG (docs/guides/harness_lessons.md) ---\n{self.lessons_content}"
+            testwriter_system += f"\n\n--- BÀI HỌC TỰ ĐỘNG (scripts/harness_lessons.md) ---\n{self.lessons_content}"
         testwriter_system += react_instruction
 
         developer_system = (
@@ -1636,7 +1570,7 @@ class AIDeveloperHarness:
         if self.policy_content:
             developer_system += f"--- CHÍNH SÁCH LẬP TRÌNH BẮT BUỘC (CODING_POLICY.md) ---\n{self.policy_content}"
         if self.lessons_content:
-            developer_system += f"\n\n--- BÀI HỌC TỰ ĐỘNG (docs/guides/harness_lessons.md) ---\n{self.lessons_content}"
+            developer_system += f"\n\n--- BÀI HỌC TỰ ĐỘNG (scripts/harness_lessons.md) ---\n{self.lessons_content}"
         developer_system += react_instruction
 
         # 3. Định nghĩa các Callback kết thúc cho từng pha
