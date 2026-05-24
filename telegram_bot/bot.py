@@ -79,6 +79,7 @@ class TelegramHarness(AIDeveloperHarness):
         super().__init__(auto_approve=auto_approve)
         if force_mock:
             self.mock_mode = True
+            self.llm_router.mock_mode = True
 
     def ask_approval(self, message: str, force_ask: bool = False) -> bool:
         if self.auto_approve:
