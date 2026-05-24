@@ -1,0 +1,217 @@
+import os
+import sys
+import time
+import re
+
+class LLMRouter:
+    def __init__(self, provider: str, api_key: str, model_name: str, log_file: str, mock_mode: bool):
+        self.provider = provider
+        self.api_key = api_key
+        self.model_name = model_name
+        self.log_file = log_file
+        self.mock_mode = mock_mode
+        self.gemini_caches = {}
+        self.client = None
+        self.current_role = "Planner"
+        
+        if not self.mock_mode:
+            self.init_llm_client()
+            
+    def init_llm_client(self):
+        """Khởi tạo Client LLM dựa trên Provider."""
+        try:
+            if self.provider == "gemini":
+                from google import genai
+                from google.genai import types
+                self.client = genai.Client(
+                    api_key=self.api_key,
+                    http_options=types.HttpOptions(timeout=600_000) # Tăng timeout lên 10 phút
+                )
+            elif self.provider == "openai":
+                from openai import OpenAI
+                self.client = OpenAI(api_key=self.api_key)
+            elif self.provider == "claude":
+                import anthropic
+                self.client = anthropic.Anthropic(api_key=self.api_key)
+            elif self.provider == "deepseek":
+                from openai import OpenAI
+                self.client = OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com")
+        except ImportError as e:
+            missing_lib = {
+                "gemini": "google-genai",
+                "openai": "openai",
+                "claude": "anthropic",
+                "deepseek": "openai"
+            }.get(self.provider, "openai")
+            print(f"\n[LỖI HỆ THỐNG]: Chưa cài đặt thư viện '{missing_lib}'.")
+            print(f"Vui lòng chạy lệnh sau trên terminal để cài đặt:\n👉 pip install {missing_lib}\n")
+            sys.exit(1)
+
+    def call_llm(self, prompt: str, system_instruction: str, build_cache_func, stop_sequences: list[str] = None) -> str:
+        """Gọi LLM để lấy phân tích và hành động tiếp theo."""
+        if self.mock_mode:
+            return self.get_mock_agent_response(self.current_role)
+            
+        max_retries = 3
+        backoff = 2
+        
+        for attempt in range(max_retries):
+            try:
+                if self.provider == "gemini":
+                    from google.genai import types
+                    
+                    active_model = "gemini-2.5-flash"
+                    if self.current_role == "Developer":
+                        self.model_name = self.model_name or "gemini-2.5-flash"
+                        active_model = self.model_name
+                    
+                    cache_key = f"shared_cache_{active_model}"
+                    cache_name = self.gemini_caches.get(cache_key)
+                    
+                    if not cache_name:
+                        try:
+                            print(f"⚡ [Harness Gemini Cache]: Đang tạo Context Cache dùng chung cho model {active_model}...")
+                            model_id = active_model
+                            if not model_id.startswith("models/"):
+                                model_id = f"models/{model_id}"
+                                
+                            cache_contents = build_cache_func()
+                            
+                            cache = self.client.caches.create(
+                                model=model_id,
+                                config=types.CreateCachedContentConfig(
+                                    contents=cache_contents,
+                                    ttl="3600s" # Tăng TTL lên 1 giờ để giữ cache lâu hơn cho các task dài
+                                )
+                            )
+                            cache_name = cache.name
+                            self.gemini_caches[cache_key] = cache_name
+                            print(f"✅ [Harness Gemini Cache]: Đã kích hoạt Cache dùng chung thành công ({cache_name})")
+                        except Exception as e:
+                            print(f"⚠️ [Harness Gemini Cache Warning]: Không tạo được Cache ({e}). Sẽ fallback về chế độ bình thường.")
+                            cache_name = None
+                    
+                    model_id = active_model
+                    if not model_id.startswith("models/"):
+                        model_id = f"models/{model_id}"
+    
+                    if cache_name:
+                        # Khi dùng cached_content, không được truyền system_instruction parameter.
+                        # Nhúng system_instruction vào contents thay thế.
+                        combined_prompt = f"[SYSTEM_INSTRUCTION]\n{system_instruction}\n[/SYSTEM_INSTRUCTION]\n\n{prompt}"
+                        response = self.client.models.generate_content(
+                            model=model_id,
+                            contents=combined_prompt,
+                            config=types.GenerateContentConfig(
+                                cached_content=cache_name,
+                                temperature=0.0,
+                                stop_sequences=stop_sequences
+                            )
+                        )
+                    else:
+                        response = self.client.models.generate_content(
+                            model=model_id,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_instruction,
+                                temperature=0.0,
+                                stop_sequences=stop_sequences
+                            )
+                        )
+                    
+                    usage = getattr(response, 'usage_metadata', None)
+                    if usage:
+                        prompt_tokens = getattr(usage, 'prompt_token_count', 0)
+                        completion_tokens = getattr(usage, 'candidates_token_count', 0)
+                        cached_tokens = getattr(usage, 'cached_content_token_count', 0)
+                        total_tokens = getattr(usage, 'total_token_count', 0)
+                        log_msg = (
+                            f"\n📊 [GEMINI API USAGE]:\n"
+                            f"   ├─ 📥 Input Tokens: {prompt_tokens} ({cached_tokens} cached)\n"
+                            f"   ├─ 📤 Output Tokens: {completion_tokens}\n"
+                            f"   └─ 🧮 Total Tokens: {total_tokens}\n"
+                        )
+                        print(log_msg)
+                        with open(self.log_file, "a", encoding="utf-8") as f:
+                            f.write(log_msg)
+                            
+                    response_text = response.text if hasattr(response, 'text') else str(response)
+                    if response_text is None:
+                        raise ValueError("Gemini API returned empty/blocked response (response.text is None)")
+                    return response_text
+                elif self.provider == "claude":
+                    kwargs = {
+                        "model": self.model_name,
+                        "max_tokens": 4000,
+                        "temperature": 0.0,
+                        "system": system_instruction,
+                        "messages": [{"role": "user", "content": prompt}]
+                    }
+                    if stop_sequences:
+                        kwargs["stop_sequences"] = stop_sequences
+                    response = self.client.messages.create(**kwargs)
+                    return response.content[0].text
+                else:
+                    # OpenAI và DeepSeek
+                    kwargs = {
+                        "model": self.model_name,
+                        "messages": [
+                            {"role": "system", "content": system_instruction},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.0
+                    }
+                    if stop_sequences:
+                        kwargs["stop"] = stop_sequences
+                    response = self.client.chat.completions.create(**kwargs)
+                    return response.choices[0].message.content
+            except Exception as e:
+                err_msg = str(e)
+                is_rate_limit = any(keyword in err_msg or keyword in err_msg.lower() for keyword in ["429", "resource_exhausted", "quota", "rate limit", "rate_limit"])
+                
+                if attempt < max_retries - 1:
+                    sleep_time = 15 * (attempt + 1) if is_rate_limit else backoff
+                    print(f"⚠️ [Harness API Warning]: Lần gọi {attempt + 1} cho {self.provider.upper()} thất bại ({err_msg}). Đang thử lại sau {sleep_time} giây...")
+                    time.sleep(sleep_time)
+                    if not is_rate_limit:
+                        backoff *= 2
+                else:
+                    print(f"\n=============================================================")
+                    print(f"⚠️ [CẢNH BÁO LỖI KẾT NỐI API {self.provider.upper()}]")
+                    print(f"=============================================================")
+                    
+                    if is_rate_limit:
+                        print(f"👉 Chi tiết: API bị giới hành tốc độ sau {max_retries} lần thử lại với Progressive Backoff.")
+                    elif "402" in err_msg or "insufficient_balance" in err_msg.lower():
+                        print(f"👉 Chi tiết: Tài khoản API không đủ số dư (Insufficient Balance).")
+                    elif "403" in err_msg or "401" in err_msg or "invalid" in err_msg.lower() or "unauthorized" in err_msg.lower():
+                        print(f"👉 Chi tiết: Khóa API '{self.provider.upper()}_API_KEY' không hợp lệ.")
+                    else:
+                        print(f"👉 Chi tiết lỗi: {err_msg}")
+                        
+                    print(f"\n🤖 [Hệ thống]: Tự động chuyển đổi sang chế độ giả lập (Mock Mode) để tiếp tục quy trình...")
+                    print(f"=============================================================\n")
+                    self.mock_mode = True
+                    return self.get_mock_agent_response(self.current_role)
+
+    def get_mock_agent_response(self, role: str) -> str:
+        """Trả về phản hồi giả lập của Agent dựa trên vai trò hoạt động."""
+        # Note: self.iteration_count is handled by the caller/orchestrator
+        if role == "Planner":
+            # Simple static mock or stateful mock
+            # In actual execution, the orchestrator iteration controls what it returns. We'll let the orchestrator mock it.
+            # But we can provide a default here as fallback:
+            plan_md = (
+                "### AI EXECUTION PLAN: TÍCH HỢP THỰC THỂ POSTCATEGORY\n\n"
+                "1. **Phân tích Kiến trúc**:\n"
+                "   - Lớp Domain: Tạo thực thể `PostCategory.cs` kế thừa từ `BaseEntity`.\n"
+                "   - Lớp Application: Tạo Command/Query để thêm mới và truy vấn danh mục bài viết thông qua MediatR.\n"
+                "2. **Kịch bản kiểm thử (Test Cases)**:\n"
+                "   - Viết Integration Test kiểm chứng việc tạo mới PostCategory thành công với dữ liệu hợp lệ."
+            )
+            return f"THOUGHT: Tôi đã lập xong kế hoạch chi tiết.\nACTION: finish_task('{plan_md}')\n"
+        elif role == "TestWriter":
+            return "THOUGHT: Tôi đã viết xong các file test cần thiết.\nACTION: finish_task('Đã viết thành công integration tests cho PostCategory.')\n"
+        elif role == "Developer":
+            return "THOUGHT: Các bài test đã pass thành công! Tôi sẽ gọi finish_task.\nACTION: finish_task('Đã hiện thực hóa PostCategory.cs và vượt qua tất cả các bài kiểm thử.')\n"
+        return "THOUGHT: Kết thúc.\nACTION: finish_task('Done')\n"
