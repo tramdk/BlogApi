@@ -10,6 +10,7 @@ Cách dùng:
 """
 
 import asyncio
+import io
 import logging
 import os
 import queue
@@ -119,6 +120,31 @@ async def _safe_send(bot, chat_id: int, text: str, reply_markup=None):
                 logger.error("Send failed after 3 retries: %s", exc)
 
 
+async def _safe_send_document(bot, chat_id: int, file_data: bytes, filename: str, caption: str = None):
+    """Gửi document với retry khi bị flood ban."""
+    import re as _re
+    for attempt in range(3):
+        try:
+            await bot.send_document(
+                chat_id=chat_id,
+                document=io.BytesIO(file_data),
+                filename=filename,
+                caption=caption,
+            )
+            return
+        except Exception as exc:
+            err = str(exc).lower()
+            if "retry after" in err:
+                m = _re.search(r"retry after\s+(\d+)", err)
+                wait = int(m.group(1)) + 1 if m else 5
+                logger.warning("Flood wait %ds, sleeping...", wait)
+                await asyncio.sleep(wait)
+            elif attempt < 2:
+                await asyncio.sleep(1)
+            else:
+                logger.error("Send document failed after 3 retries: %s", exc)
+
+
 async def stream_output(
     chat_id: int,
     msg_queue: queue.Queue,
@@ -143,9 +169,22 @@ async def stream_output(
             text = payload.strip()
             if not text:
                 continue
-            for i in range(0, len(text), 4000):
-                await _safe_send(app.bot, chat_id=chat_id, text=text[i : i + 4000])
+            if len(text) > 1500:
+                # Gửi log dài dưới dạng file đính kèm
+                title = text.split("\n")[0][:100] if text.split("\n") else "Log Output"
+                caption = f"📄 {title}..."
+                await _safe_send_document(
+                    app.bot,
+                    chat_id=chat_id,
+                    file_data=text.encode("utf-8"),
+                    filename="harness_log.txt",
+                    caption=caption
+                )
                 await asyncio.sleep(MESSAGE_GAP)
+            else:
+                for i in range(0, len(text), 4000):
+                    await _safe_send(app.bot, chat_id=chat_id, text=text[i : i + 4000])
+                    await asyncio.sleep(MESSAGE_GAP)
         elif typ == "approval":
             message, _chat_id = payload
             keyboard = InlineKeyboardMarkup([

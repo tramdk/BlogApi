@@ -1089,6 +1089,31 @@ class AIDeveloperHarness:
                 
             approved = self.ask_approval("Bạn có đồng ý phê duyệt Bản kế hoạch thực thi này không?", force_ask=True)
             if approved:
+                # Đọc lại bản kế hoạch từ ổ đĩa đề phòng trường hợp lập trình viên chỉnh sửa thủ công
+                try:
+                    if os.path.exists(plan_path):
+                        with open(plan_path, "r", encoding="utf-8") as f:
+                            disk_plan_content = f.read()
+                        if disk_plan_content.strip() != plan_content.strip():
+                            print("\n⚙️ [Harness Control]: Phát hiện bản kế hoạch đã được chỉnh sửa thủ công trên đĩa. Đang nạp lại...")
+                            plan_content = disk_plan_content
+                            
+                            # Phân tích lại danh sách files và test filter keyword
+                            production_files = []
+                            matches = re.findall(path_pattern, plan_content)
+                            for m in matches:
+                                cleaned = m.strip('`').strip()
+                                if cleaned not in production_files:
+                                    production_files.append(cleaned)
+                            self.planner_production_files = production_files
+                            self.test_filter_keyword = self.extract_test_filter_keyword(plan_content, task_description)
+                            print(f"🔄 [Harness Reloaded]: Cập nhật Test filter keyword: '{self.test_filter_keyword}'")
+                            if production_files:
+                                print(f"📋 [Harness Reloaded]: Cập nhật danh sách {len(production_files)} file production: {', '.join(production_files)}")
+                except Exception as e:
+                    print(f"⚠️ Lỗi khi nạp lại kế hoạch từ ổ đĩa: {e}")
+                
+                self.current_plan = plan_content
                 return True, ""
             else:
                 feedback = input("\n📝 Nhập ý kiến góp ý/yêu cầu sửa đổi của bạn cho bản kế hoạch:\n👉 ")
@@ -1240,6 +1265,7 @@ class AIDeveloperHarness:
         )
         
         # --- CHẠY PHA 1: PLANNING ---
+        self.current_plan = ""
         plan = self.run_agent_loop(
             role="Planner",
             system_instruction=planner_system,
@@ -1250,11 +1276,14 @@ class AIDeveloperHarness:
             print("❌ Pha lập kế hoạch thất bại hoặc bị ngắt sớm. Dừng pipeline.")
             return
 
+        if not self.current_plan:
+            self.current_plan = plan
+
         # --- CHẠY PHA 2: TEST WRITING ---
         test_report = self.run_agent_loop(
             role="TestWriter",
             system_instruction=testwriter_system,
-            initial_context=context_tree_header + f"Bản kế hoạch đã duyệt:\n{plan}\n\nHãy viết các file unit/integration test phản ánh đúng đặc tả này. Chỉ sửa thư mục test. Gọi finish_task khi hoàn thành.",
+            initial_context=context_tree_header + f"Bản kế hoạch đã duyệt:\n{self.current_plan}\n\nHãy viết các file unit/integration test phản ánh đúng đặc tả này. Chỉ sửa thư mục test. Gọi finish_task khi hoàn thành.",
             on_finish_callback=on_testwriter_finish
         )
         if not test_report:
@@ -1265,7 +1294,7 @@ class AIDeveloperHarness:
         dev_report = self.run_agent_loop(
             role="Developer",
             system_instruction=developer_system,
-            initial_context=context_tree_header + f"Bản kế hoạch:\n{plan}\n\nBáo cáo test cases:\n{test_report}\n\nHãy bắt đầu sửa code production để pass tất cả tests. Gọi finish_task khi hoàn tất.",
+            initial_context=context_tree_header + f"Bản kế hoạch:\n{self.current_plan}\n\nBáo cáo test cases:\n{test_report}\n\nHãy bắt đầu sửa code production để pass tất cả tests. Gọi finish_task khi hoàn tất.",
             on_finish_callback=on_developer_finish
         )
         if not dev_report:
