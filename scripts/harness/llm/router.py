@@ -140,16 +140,57 @@ class LLMRouter:
                         raise ValueError("Gemini API returned empty/blocked response (response.text is None)")
                     return response_text
                 elif self.provider == "claude":
+                    # Anthropic Prompt Caching (Beta): cấu trúc system và messages
+                    # thành content blocks có cache_control để tận dụng cache token đầu vào.
                     kwargs = {
                         "model": self.model_name,
                         "max_tokens": 4000,
                         "temperature": 0.0,
-                        "system": system_instruction,
-                        "messages": [{"role": "user", "content": prompt}]
+                        "system": [
+                            {
+                                "type": "text",
+                                "text": system_instruction,
+                                "cache_control": {"type": "ephemeral"}
+                            }
+                        ],
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": prompt,
+                                        "cache_control": {"type": "ephemeral"}
+                                    }
+                                ]
+                            }
+                        ],
+                        "extra_headers": {
+                            "anthropic-beta": "prompt-caching-2024-07-31"
+                        }
                     }
                     if stop_sequences:
                         kwargs["stop_sequences"] = stop_sequences
                     response = self.client.messages.create(**kwargs)
+
+                    # Ghi lại thống kê Cache Usage từ Anthropic
+                    usage = getattr(response, 'usage', None)
+                    if usage:
+                        input_tokens = getattr(usage, 'input_tokens', 0)
+                        output_tokens = getattr(usage, 'output_tokens', 0)
+                        cache_read = getattr(usage, 'cache_read_input_tokens', 0) or 0
+                        cache_creation = getattr(usage, 'cache_creation_input_tokens', 0) or 0
+                        log_msg = (
+                            f"\n📊 [CLAUDE API USAGE]:\n"
+                            f"   ├─ 📥 Input Tokens: {input_tokens}\n"
+                            f"   ├─ 📤 Output Tokens: {output_tokens}\n"
+                            f"   ├─ ♻️  Cache Read (hit): {cache_read} tokens\n"
+                            f"   └─ 🆕 Cache Creation (miss): {cache_creation} tokens\n"
+                        )
+                        print(log_msg)
+                        with open(self.log_file, "a", encoding="utf-8") as f:
+                            f.write(log_msg)
+
                     return response.content[0].text
                 else:
                     # OpenAI và DeepSeek
