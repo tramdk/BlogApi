@@ -1,10 +1,18 @@
 import os
 
-def read_source_file(file_path: str) -> str:
-    """Đọc nội dung một file nguồn trong dự án."""
+def read_source_file(file_path: str, start_line: int = None, end_line: int = None) -> str:
+    """Đọc nội dung một file nguồn trong dự án (hỗ trợ phân trang)."""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read()
+            lines = f.readlines()
+            
+            if start_line is not None and end_line is not None:
+                # 1-indexed for user input
+                start = max(0, start_line - 1)
+                end = min(len(lines), end_line)
+                lines = lines[start:end]
+                
+            return "".join(lines)
     except Exception as e:
         return f"Lỗi đọc file: {str(e)}"
 

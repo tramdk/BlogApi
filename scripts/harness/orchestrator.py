@@ -5,6 +5,7 @@ import ast
 import json
 import time
 import subprocess
+import copy
 
 try:
     from dotenv import load_dotenv
@@ -37,7 +38,8 @@ from harness.safety import (
 from harness.llm import (
     LLMRouter,
     build_cache_contents,
-    generate_directory_tree
+    generate_directory_tree,
+    TOOLS_SCHEMA
 )
 from harness.memory import distill_and_persist_lessons
 
@@ -161,7 +163,7 @@ class AIDeveloperHarness:
             return False
 
     def call_llm(self, prompt: str, system_instruction: str, stop_sequences: list[str] = None) -> str:
-        """Gọi LLM để lấy phân tích và hành động tiếp theo."""
+        """[LEGACY] Gọi LLM để lấy phân tích (text-only, không dùng function calling). Dùng cho Evaluator."""
         self.llm_router.current_role = self.current_role
         return self.llm_router.call_llm(
             prompt=prompt,
@@ -170,17 +172,27 @@ class AIDeveloperHarness:
             stop_sequences=stop_sequences
         )
 
-    def execute_mock_action(self, action_name: str, parsed_args: tuple) -> str:
+    def call_llm_with_tools(self, messages: list[dict], system_instruction: str) -> dict:
+        """Gọi LLM với Native Function Calling. Trả về dict chuẩn hóa."""
+        self.llm_router.current_role = self.current_role
+        return self.llm_router.call_llm_with_tools(
+            messages=messages,
+            system_instruction=system_instruction,
+            tools_schema=TOOLS_SCHEMA,
+            build_cache_func=self._build_cache_helper
+        )
+
+    def execute_mock_action(self, action_name: str, action_args: dict) -> str:
         """Thực thi action giả lập để trả về Observation trong Mock Mode."""
         if action_name == "execute_command":
-            cmd = parsed_args[0] if len(parsed_args) > 0 else ""
+            cmd = action_args.get("command", "")
             return format_observation(
                 status="SUCCESS",
                 summary=f"(MOCK) Chạy lệnh '{cmd}' thành công.",
                 details="Mock output: Lệnh chạy thành công."
             )
-        elif action_name == "read_source":
-            filepath = parsed_args[0] if len(parsed_args) > 0 else ""
+        elif action_name == "view_source":
+            filepath = action_args.get("file_path", "")
             return format_observation(
                 status="SUCCESS",
                 summary=f"(MOCK) Đọc file '{filepath}' thành công.",
@@ -188,7 +200,7 @@ class AIDeveloperHarness:
                 artifacts=[filepath]
             )
         elif action_name == "write_source":
-            filepath = parsed_args[0] if len(parsed_args) > 0 else ""
+            filepath = action_args.get("file_path", "")
             return format_observation(
                 status="SUCCESS",
                 summary=f"(MOCK) Ghi file '{filepath}' thành công.",
@@ -396,54 +408,51 @@ class AIDeveloperHarness:
         except Exception as e:
             return -1, f"Lỗi thực thi validate-policy: {str(e)}"
 
-    def condense_history_tokens(self, history: str) -> str:
-        """Phân tích lịch sử hội thoại dạng chuỗi và nén các lượt cũ để tiết kiệm token."""
-        parts = re.split(r"(\bLượt \d+:)", history)
-        if len(parts) <= 3:
-            return history
-            
-        header = parts[0]
-        turns = []
-        for i in range(1, len(parts), 2):
-            turn_header = parts[i]
-            turn_body = parts[i+1]
-            turns.append((turn_header, turn_body))
-            
-        # Duyệt qua các lượt cũ (tất cả trừ lượt cuối cùng) để nén
-        for idx in range(len(turns) - 1):
-            header_str, body_str = turns[idx]
-            
-            # 1. Nén hành động đọc file (read_source / read_file)
-            if "read_source" in body_str or "read_file" in body_str:
-                obs_match = re.search(r"(=== OBSERVATION ===.*?DETAILS:\n)(.*?)(===================)", body_str, re.DOTALL)
-                if obs_match:
-                    prefix = obs_match.group(1)
-                    details = obs_match.group(2)
-                    suffix = obs_match.group(3)
+    def condense_message_history(self, messages: list[dict]) -> list[dict]:
+        """
+        Nén lịch sử hội thoại dạng mảng messages để tiết kiệm token.
+        Giữ nguyên tin nhắn user ban đầu và 2 lượt gần nhất. Thu gọn các lượt cũ hơn.
+        """
+        if len(messages) <= 6:
+            return messages
+        
+        condensed = []
+        # Luôn giữ nguyên tin nhắn user đầu tiên (chứa context + task description)
+        condensed.append(messages[0])
+        
+        # Xác định các cặp (assistant + tool) messages ở giữa để nén
+        # Giữ nguyên 4 messages cuối (~ 2 lượt tool call gần nhất)
+        middle_messages = messages[1:-4]
+        tail_messages = messages[-4:]
+        
+        for msg in middle_messages:
+            if msg["role"] == "tool":
+                content = msg.get("content", "")
+                # Nén nội dung OBSERVATION quá dài từ các lượt cũ
+                if len(content) > 300:
+                    # Giữ lại STATUS và SUMMARY, cắt bỏ DETAILS dài
+                    status_match = re.search(r"STATUS:\s*(\S+)", content)
+                    summary_match = re.search(r"SUMMARY:\s*(.*?)(?=\n|$)", content)
+                    status = status_match.group(1) if status_match else "UNKNOWN"
+                    summary = summary_match.group(1) if summary_match else "Đã thực thi"
                     
-                    if len(details) > 300:
-                        condensed_details = "   (Nội dung chi tiết tệp tin đã được đọc ở lượt cũ đã lược bỏ để tiết kiệm token.)\n"
-                        new_body = body_str.replace(obs_match.group(0), f"{prefix}{condensed_details}{suffix}")
-                        turns[idx] = (header_str, new_body)
-                        body_str = new_body
-                        
-            # 2. Nén hành động chạy lệnh hệ thống (execute_command / run_command)
-            if "execute_command" in body_str or "run_command" in body_str:
-                obs_match = re.search(r"(=== OBSERVATION ===.*?DETAILS:\n)(.*?)(===================)", body_str, re.DOTALL)
-                if obs_match:
-                    prefix = obs_match.group(1)
-                    details = obs_match.group(2)
-                    suffix = obs_match.group(3)
-                    
-                    if len(details) > 300:
-                        condensed_details = "   (Chi tiết log thực thi lệnh ở lượt cũ đã lược bỏ để tiết kiệm token.)\n"
-                        new_body = body_str.replace(obs_match.group(0), f"{prefix}{condensed_details}{suffix}")
-                        turns[idx] = (header_str, new_body)
-                        
-        rebuilt = header
-        for header_str, body_str in turns:
-            rebuilt += header_str + body_str
-        return rebuilt
+                    condensed_msg = copy.deepcopy(msg)
+                    condensed_msg["content"] = (
+                        f"=== OBSERVATION (ĐÃ NÉN) ===\n"
+                        f"STATUS: {status}\n"
+                        f"SUMMARY: {summary}\n"
+                        f"(Chi tiết đã lược bỏ để tiết kiệm token)\n"
+                        f"===================\n"
+                    )
+                    condensed.append(condensed_msg)
+                else:
+                    condensed.append(msg)
+            else:
+                condensed.append(msg)
+        
+        # Giữ nguyên các messages gần nhất
+        condensed.extend(tail_messages)
+        return condensed
 
     def distill_and_persist_lessons(self, task_description: str):
         """Tự động phân tích lịch sử log chạy và báo cáo đánh giá để đúc kết bài học kinh nghiệm vào harness_lessons.md."""
@@ -464,72 +473,37 @@ class AIDeveloperHarness:
             call_llm_func=call_llm_helper
         )
 
-    def print_agent_response(self, response: str):
-        """Hiển thị phản hồi của Agent một cách trực quan, sạch sẽ và có cấu trúc trên terminal."""
-        if response is None:
-            print("\n🚨 [Harness Error]: Response từ LLM là None. Không thể hiển thị.")
-            return
-        thought_match = re.search(r"\bTHOUGHT\s*:\s*(.*?)(?=\bACTION\s*:|$)", response, re.DOTALL | re.IGNORECASE)
-        action_match = re.search(r"\bACTION\s*:\s*(.*)", response, re.DOTALL | re.IGNORECASE)
+    def print_tool_call(self, tool_call: dict, thought: str = ""):
+        """Hiển thị tool call từ Native Function Calling một cách trực quan trên terminal."""
+        func = tool_call["function"]
+        name = func["name"]
+        args = func["arguments"]
         
-        # 1. Hiển thị THOUGHT nếu có
-        if thought_match:
-            thought = thought_match.group(1).strip()
+        if thought:
             print(f"\n🧠 [THOUGHT]: {thought}")
             
-        # 2. Hiển thị ACTION nếu có
-        if action_match:
-            action_text = action_match.group(1).strip()
-            func_match = re.search(r"\b(execute_command|read_source|write_source|finish_task|run_command|read_file|write_file|done)\((.*)\)", action_text, re.DOTALL)
-            if func_match:
-                func_name = func_match.group(1).strip()
-                func_args = func_match.group(2).strip()
-                
-                display_name = {
-                    "run_command": "execute_command",
-                    "read_file": "read_source",
-                    "write_file": "write_source",
-                    "done": "finish_task"
-                }.get(func_name, func_name)
-                
-                print(f"🎬 [ACTION]: 🛠  {display_name}")
-                
-                parsed_args = None
-                try:
-                    parsed_args = ast.literal_eval(f"({func_args})")
-                    if parsed_args is not None and not isinstance(parsed_args, tuple):
-                        parsed_args = (parsed_args,)
-                except Exception:
-                    pass
-                if parsed_args is None:
-                    parsed_args = safe_parse_action_arguments(func_args)
-                
-                if display_name == "write_source" and len(parsed_args) >= 2:
-                    filepath = parsed_args[0]
-                    print(f"   ├─ 📂 Đường dẫn: {filepath}")
-                    print(f"   └─ 📝 Nội dung: [Mã nguồn được ghi - Xem chi tiết tại Preview]")
-                elif display_name == "read_source" and len(parsed_args) >= 1:
-                    filepath = parsed_args[0]
-                    print(f"   └─ 📂 Đường dẫn: {filepath}")
-                elif display_name == "execute_command" and len(parsed_args) >= 1:
-                    cmd = parsed_args[0]
-                    print(f"   └─ 💻 Lệnh chạy: '{cmd}'")
-                elif display_name == "finish_task" and len(parsed_args) >= 1:
-                    summary = parsed_args[0]
-                    summary_clean = summary.replace("\\n", "\n").replace("\n", "\n      ")
-                    print(f"   └─ 🏁 Báo cáo kết quả:\n      {summary_clean}")
-                else:
-                    print(f"   └─ ⚙️ Tham số: {parsed_args}")
-            else:
-                print(f"🎬 [ACTION]: {action_text[:300]}...")
-                
-        if not thought_match and not action_match:
-            print(f"\n💬 [AGENT]:\n{response[:500]}")
-            if len(response) > 500:
-                print("... [TRUNCATED] ...")
+        print(f"🎬 [ACTION]: 🛠  {name}")
+        
+        if name == "write_source":
+            print(f"   ├─ 📂 Đường dẫn: {args.get('file_path', '')}")
+            print(f"   └─ 📝 Nội dung: [Mã nguồn được ghi - Xem chi tiết tại Preview]")
+        elif name == "view_source":
+            filepath = args.get('file_path', '')
+            start = args.get('start_line', '')
+            end = args.get('end_line', '')
+            range_info = f" (dòng {start}-{end})" if start and end else ""
+            print(f"   └─ 📂 Đường dẫn: {filepath}{range_info}")
+        elif name == "execute_command":
+            print(f"   └─ 💻 Lệnh chạy: '{args.get('command', '')}'")
+        elif name == "finish_task":
+            summary = args.get('summary', '')
+            summary_clean = summary.replace("\\n", "\n").replace("\n", "\n      ")
+            print(f"   └─ 🏁 Báo cáo kết quả:\n      {summary_clean}")
+        else:
+            print(f"   └─ ⚙️ Tham số: {args}")
 
     def run_agent_loop(self, role: str, system_instruction: str, initial_context: str, on_finish_callback) -> str:
-        """Thực thi vòng lặp ReAct (Suy nghĩ -> Hành động -> Quan sát) cho một Agent cụ thể."""
+        """Thực thi vòng lặp ReAct (Suy nghĩ -> Hành động -> Quan sát) cho một Agent cụ thể, sử dụng Native Function Calling."""
         print(f"\n=============================================================")
         print(f"🤖 KÍCH HOẠT AGENT: [{role.upper()}]")
         print(f"=============================================================")
@@ -543,91 +517,65 @@ class AIDeveloperHarness:
         self.action_history = []
         self.write_history = {}
         self.test_failure_history = []
-        context_history = initial_context
         
-        while self.iteration_count < self.max_iterations:
+        # Khởi tạo messages array với tin nhắn user đầu tiên
+        messages = [
+            {"role": "user", "content": initial_context}
+        ]
+        
+        while self.max_iterations < 0 or self.iteration_count < self.max_iterations:
             if self.iteration_count > 0:
                 time.sleep(2)
             
-            optimized_history = self.condense_history_tokens(context_history)
-            response = self.call_llm(optimized_history, system_instruction, stop_sequences=["OBSERVATION:", "Observation:", "=== OBSERVATION ==="])
+            # Nén lịch sử nếu quá dài
+            optimized_messages = self.condense_message_history(messages)
+            
+            # Gọi LLM với Native Function Calling
+            response = self.call_llm_with_tools(optimized_messages, system_instruction)
+            
             if response is None:
                 print(f"\n🚨 [Harness Error]: LLM trả về None response. Dừng agent {role}.")
                 return ""
-            self.print_agent_response(response)
             
-            with open(self.log_file, "a", encoding="utf-8") as f:
-                f.write(f"\n[{role} Lượt {self.iteration_count}]:\n{response}\n")
+            thought = response.get("thought", "")
+            tool_calls = response.get("tool_calls", [])
             
-            turns = re.split(r"\bLượt \d+:", response, flags=re.IGNORECASE)
-            active_part = turns[-1] if turns else response
-
-            cleaned_response = re.sub(r"```[a-zA-Z_]*", "", active_part)
-            cleaned_response = cleaned_response.replace("`", "")
-            
-            action_blocks = re.split(r"\bACTION\s*:", cleaned_response, flags=re.IGNORECASE)
-            target_block = action_blocks[-1].strip() if action_blocks else cleaned_response.strip()
-
-            action_match = re.search(r"\b(execute_command|read_source|write_source|finish_task)\((.*)\)", target_block, re.DOTALL)
-            if not action_match:
-                action_match = re.search(r"\b(run_command|read_file|write_file|done)\((.*)\)", target_block, re.DOTALL)
-                
-            if not action_match:
-                print(f"[Harness Error]: Không parse được ACTION từ Agent {role}. Yêu cầu sửa cú pháp...")
-                observation = format_observation(
-                    status="ERROR",
-                    summary="Lỗi cú pháp phản hồi.",
-                    details="Bạn bắt buộc phải đưa ra cấu trúc định dạng:\nTHOUGHT: <suy nghĩ>\nACTION: <tên_hàm>(<đối_số>)\nVui lòng chỉ chọn duy nhất một ACTION hợp lệ.",
-                    next_actions=["Viết lại response với định dạng THOUGTH: ...\nACTION: read_source(...) hoặc write_source(...) hoặc execute_command(...) hoặc finish_task(...)"]
-                )
-                context_history += f"\nLượt {self.iteration_count}:\n{response}\nOBSERVATION: {observation}\n"
+            # Nếu LLM không trả về tool call nào, yêu cầu retry
+            if not tool_calls:
+                print(f"[Harness Warning]: LLM không gọi tool nào ở lượt {self.iteration_count}. Yêu cầu gọi lại...")
+                # Append assistant message (chỉ có text) và user message yêu cầu gọi tool
+                if thought:
+                    messages.append({"role": "assistant", "content": thought})
+                messages.append({
+                    "role": "user",
+                    "content": "Bạn BẮT BUỘC phải gọi một trong các tool: view_source, write_source, execute_command, hoặc finish_task. Hãy chọn một tool và gọi ngay."
+                })
+                self.iteration_count += 1
                 continue
-                
-            action_name = action_match.group(1).strip()
-            action_args = action_match.group(2).strip()
             
-            if action_name == "run_command":
-                action_name = "execute_command"
-            elif action_name == "read_file":
-                action_name = "read_source"
-            elif action_name == "write_file":
-                action_name = "write_source"
-            elif action_name == "done":
-                action_name = "finish_task"
+            # Lấy tool call đầu tiên (chỉ xử lý 1 tool mỗi lượt)
+            tool_call = tool_calls[0]
+            action_name = tool_call["function"]["name"]
+            action_args = tool_call["function"]["arguments"]
+            if isinstance(action_args, str):
+                try:
+                    action_args = json.loads(action_args)
+                except json.JSONDecodeError:
+                    action_args = {}
             
-            current_action = (action_name, action_args.strip())
+            # Hiển thị tool call
+            self.print_tool_call(tool_call, thought)
+            
+            # Ghi log
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(f"\n[{role} Lượt {self.iteration_count}]:\n")
+                f.write(f"THOUGHT: {thought}\n")
+                f.write(f"TOOL CALL: {action_name}({json.dumps(action_args, ensure_ascii=False)[:500]})\n")
+            
+            # === PHÁT HIỆN VÒNG LẶP (Loop Detection) ===
+            current_action = (action_name, json.dumps(action_args, sort_keys=True, ensure_ascii=False)[:200])
             self.action_history.append(current_action)
-
-            parsed_args = None
-            try:
-                parsed_args = ast.literal_eval(f"({action_args})")
-                if parsed_args is not None and not isinstance(parsed_args, tuple):
-                    parsed_args = (parsed_args,)
-            except Exception:
-                pass
-
-            if parsed_args is None:
-                idx = len(action_args)
-                while idx > 0:
-                    idx = action_args.rfind(')', 0, idx)
-                    if idx == -1:
-                        break
-                    candidate = action_args[:idx]
-                    try:
-                        temp_parsed = ast.literal_eval(f"({candidate})")
-                        if temp_parsed is not None:
-                            if not isinstance(temp_parsed, tuple):
-                                parsed_args = (temp_parsed,)
-                            else:
-                                parsed_args = temp_parsed
-                            action_args = candidate
-                            break
-                    except Exception:
-                        pass
-                        
-            if parsed_args is None:
-                parsed_args = safe_parse_action_arguments(action_args)
-
+            
             loop_warning = ""
             if len(self.action_history) >= 4 and self.action_history[-1] == self.action_history[-2] == self.action_history[-3] == self.action_history[-4]:
                 print("\n🚨 [Harness Early Exit]: Phát hiện vòng lặp hành động trùng lặp liên tiếp 4 lần. Dừng Agent để tránh lãng phí token.")
@@ -638,14 +586,15 @@ class AIDeveloperHarness:
                 loop_warning = (
                     "\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Bạn đang thực hiện chính xác cùng một thao tác liên tục và nhận cùng kết quả/lỗi.\n"
                     "Hãy đổi chiến thuật ngay! Bạn KHÔNG được lặp lại hành động này nữa. Hãy làm một trong các việc sau:\n"
-                    "  1. Sử dụng 'read_source' để đọc lại file bị lỗi để xem cấu trúc và nội dung thực tế trước khi sửa.\n"
+                    "  1. Sử dụng 'view_source' để đọc lại file bị lỗi để xem cấu trúc và nội dung thực tế trước khi sửa.\n"
                     "  2. Đọc các file liên quan khác để tìm giải pháp hoặc namespace đúng.\n"
                     "  3. Thực hiện thay đổi khác (ví dụ: tạo stub class trước) thay vì lặp lại thao tác lỗi."
                 )
 
-            if action_name == "write_source" and parsed_args and len(parsed_args) >= 2:
-                filepath = parsed_args[0]
-                content = parsed_args[1]
+            # Kiểm tra trùng nội dung ghi file
+            if action_name == "write_source" and action_args.get("content"):
+                filepath = action_args.get("file_path", "")
+                content = action_args.get("content", "")
                 content_hash = hash(content)
                 if filepath not in self.write_history:
                     self.write_history[filepath] = []
@@ -663,11 +612,12 @@ class AIDeveloperHarness:
                         "Hãy đổi chiến thuật: đọc kỹ stack trace lỗi, kiểm tra lại Mock setups, hoặc đọc các file kiểm thử tương ứng để hiểu logic."
                     )
             
+            # === THỰC THI TOOL ===
             observation = ""
             
             if self.mock_mode:
                 if action_name == "finish_task":
-                    finish_msg = parsed_args[0] if len(parsed_args) > 0 else ""
+                    finish_msg = action_args.get("summary", "")
                     success, feedback = on_finish_callback(finish_msg)
                     if success:
                         print(f"✅ [Agent {role}] hoàn thành xuất sắc nhiệm vụ.")
@@ -680,10 +630,10 @@ class AIDeveloperHarness:
                             next_actions=["Điều chỉnh thiết kế hoặc sửa lỗi theo ý kiến góp ý."]
                         )
                 else:
-                    observation = self.execute_mock_action(action_name, parsed_args)
+                    observation = self.execute_mock_action(action_name, action_args)
             else:
                 if action_name == "execute_command":
-                    cmd = parsed_args[0] if len(parsed_args) > 0 else ""
+                    cmd = action_args.get("command", "")
                     allowed_cmds = ["dotnet build", "dotnet test", "dotnet restore", "dotnet clean"]
                     is_git = cmd.startswith("git ") and any(sub in cmd for sub in ["status", "add", "diff"])
                     
@@ -747,18 +697,21 @@ class AIDeveloperHarness:
                                 status=status,
                                 summary=f"Chạy lệnh '{cmd}' " + ("thành công." if status == "SUCCESS" else f"thất bại ({test_fail_count} lỗi test)." if test_fail_count > 0 else "thất bại."),
                                 details=details,
-                                next_actions=["Đọc DETAILS bên trên. Nếu build thất bại: sửa code bằng write_source rồi build lại. HINT: lỗi namespace/convention? Dùng read_source('CODING_POLICY.md') để xem rules. Nếu thành công: gọi finish_task để kết thúc pha."]
+                                next_actions=["Đọc DETAILS bên trên. Nếu build thất bại: sửa code bằng write_source rồi build lại. HINT: lỗi namespace/convention? Dùng view_source('CODING_POLICY.md') để xem rules. Nếu thành công: gọi finish_task để kết thúc pha."]
                             )
                         else:
                             observation = format_observation(
                                 status="ERROR",
                                 summary="Từ chối chạy lệnh.",
                                 details="Người dùng từ chối cấp quyền chạy lệnh này.",
-                                next_actions=["Dùng read_source hoặc write_source thay vì execute_command, hoặc finish_task để kết thúc."]
+                                next_actions=["Dùng view_source hoặc write_source thay vì execute_command, hoặc finish_task để kết thúc."]
                             )
                             
-                elif action_name == "read_source":
-                    filepath = parsed_args[0] if len(parsed_args) > 0 else ""
+                elif action_name == "view_source":
+                    filepath = action_args.get("file_path", "")
+                    start_line = action_args.get("start_line")
+                    end_line = action_args.get("end_line")
+                    
                     normalized_name = os.path.basename(filepath).lower()
                     if normalized_name == ".env" or "appsettings" in normalized_name or ".env." in normalized_name:
                         observation = format_observation(
@@ -775,27 +728,42 @@ class AIDeveloperHarness:
                             next_actions=["Chỉ đọc file trong thư mục dự án: Domain/, Application/, Infrastructure/, Controllers/, FloraCore.Tests/."]
                         )
                     else:
-                        content = read_source_file(filepath)
+                        content = read_source_file(filepath, start_line, end_line)
                         status = "SUCCESS" if not content.startswith("Lỗi đọc file") else "ERROR"
-                        details = content[:12000] + ("\n...[TRUNCATED]..." if len(content) > 12000 else "")
+                        
+                        # Phân trang thông minh: nếu file quá dài và không có range, gợi ý dùng phân trang
+                        truncated = False
+                        if start_line is None and end_line is None and len(content) > 12000:
+                            total_lines = content.count('\n') + 1
+                            content = content[:12000]
+                            truncated = True
+                            
+                        details = content
+                        next_acts = ["Dùng thông tin từ file này để viết/sửa code, hoặc đọc thêm file khác."]
+                        if truncated:
+                            next_acts = [
+                                f"File này có {total_lines} dòng và đã bị cắt ngắn. Dùng view_source(file_path, start_line, end_line) để đọc phần tiếp theo.",
+                                "Dùng thông tin đã đọc được để tiếp tục công việc."
+                            ]
+                        
                         observation = format_observation(
                             status=status,
-                            summary=f"Đọc file '{filepath}' " + ("thành công." if status == "SUCCESS" else "thất bại."),
+                            summary=f"Đọc file '{filepath}'" + (f" (dòng {start_line}-{end_line})" if start_line else "") + (" thành công." if status == "SUCCESS" else " thất bại."),
                             details=details,
                             artifacts=[filepath],
-                            next_actions=["Dùng thông tin từ file này để viết/sửa code, hoặc đọc thêm file khác."]
+                            next_actions=next_acts
                         )
                     
                 elif action_name == "write_source":
-                    filepath = parsed_args[0] if len(parsed_args) > 0 else ""
-                    content = parsed_args[1] if len(parsed_args) > 1 else ""
+                    filepath = action_args.get("file_path", "")
+                    content = action_args.get("content", "")
                     
-                    if not filepath or len(parsed_args) < 2 or content is None:
+                    if not filepath or not content:
                         observation = format_observation(
                             status="ERROR",
-                            summary="write_source missing content parameter",
-                            details="Hãy dùng write_source(filepath, content) với đầy đủ hai parameter. Parameter content không được bỏ trống.",
-                            next_actions=["Gọi lại write_source với đúng cú pháp: write_source('path/to/file.cs', r\"\"\"code here\"\"\")"]
+                            summary="write_source missing parameters",
+                            details="Hãy dùng write_source với đầy đủ hai parameter: file_path và content. Cả hai không được bỏ trống.",
+                            next_actions=["Gọi lại write_source với đúng cú pháp (đầy đủ file_path và content)."]
                         )
                     elif not content.strip():
                         observation = format_observation(
@@ -871,7 +839,7 @@ class AIDeveloperHarness:
                                 )
                             
                 elif action_name == "finish_task":
-                    finish_msg = parsed_args[0] if len(parsed_args) > 0 else ""
+                    finish_msg = action_args.get("summary", "")
                     success, feedback = on_finish_callback(finish_msg)
                     if success:
                         return finish_msg
@@ -887,30 +855,54 @@ class AIDeveloperHarness:
                     observation = format_observation(
                         status="ERROR",
                         summary="Công cụ không hợp lệ.",
-                        details=f"Không hỗ trợ action '{action_name}'.",
-                        next_actions=["Chỉ dùng: read_source, write_source, execute_command, finish_task."]
+                        details=f"Không hỗ trợ tool '{action_name}'.",
+                        next_actions=["Chỉ dùng: view_source, write_source, execute_command, finish_task."]
                     )
             
+            # Chèn loop_warning vào observation nếu có
             if loop_warning:
-                 observation = observation.replace("=== OBSERVATION ===", f"=== OBSERVATION ===\n{loop_warning}")
+                observation = observation.replace("=== OBSERVATION ===", f"=== OBSERVATION ===\n{loop_warning}")
              
+            # Ghi log observation
             with open(self.log_file, "a", encoding="utf-8") as f:
                 f.write(f"\nOBSERVATION:\n{observation}\n")
                 
-            condensed_observation = observation
-            if "=== OBSERVATION ===" in observation:
-                if action_name == "execute_command" and "SUCCESS" in observation and len(observation) > 1500:
-                    cmd = parsed_args[0] if len(parsed_args) > 0 else ""
-                    condensed_observation = format_observation(
-                        status="SUCCESS",
-                        summary=f"Thực thi lệnh '{cmd}' thành công.",
-                        details="(Chi tiết log thành công đã lược bỏ.)",
-                        next_actions=["Đọc kết quả bên trên. Nếu cần chạy dotnet test hoặc finish_task."]
-                    )
-                    
-            context_history += f"\nLượt {self.iteration_count}:\n{response}\nOBSERVATION: {condensed_observation}\n"
+            # === CẬP NHẬT MESSAGES ARRAY ===
+            # 1. Append assistant message (thought + tool_call)
+            assistant_msg = {"role": "assistant"}
+            if thought:
+                assistant_msg["content"] = thought
+            assistant_msg["tool_calls"] = [{
+                "id": tool_call["id"],
+                "function": {
+                    "name": action_name,
+                    "arguments": action_args
+                }
+            }]
+            messages.append(assistant_msg)
             
-            if action_name == "finish_task" and not success:
+            # 2. Append tool result message
+            # Nén observation nếu là lệnh thành công dài
+            condensed_observation = observation
+            if action_name == "execute_command" and "SUCCESS" in observation and len(observation) > 1500:
+                cmd = action_args.get("command", "")
+                condensed_observation = format_observation(
+                    status="SUCCESS",
+                    summary=f"Thực thi lệnh '{cmd}' thành công.",
+                    details="(Chi tiết log thành công đã lược bỏ.)",
+                    next_actions=["Đọc kết quả bên trên. Nếu cần chạy dotnet test hoặc finish_task."]
+                )
+                    
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "name": action_name,
+                "content": condensed_observation
+            })
+            
+            # Nâng thêm max_iterations nếu finish_task bị reject và đang ở chế độ giới hạn lượt
+            if action_name == "finish_task" and self.max_iterations >= 0:
+                # finish_task đã được xử lý ở trên (return nếu success), nếu tới đây nghĩa là bị reject
                 self.max_iterations = max(self.max_iterations, self.iteration_count + 3)
                 
             self.iteration_count += 1
@@ -943,17 +935,16 @@ class AIDeveloperHarness:
                     print(f"⚠️ [Harness Control]: Lỗi đọc file {p_file}: {e}")
 
         # 2. Xây dựng System Instructions cho từng vai trò
-        react_instruction = (
-            "\n\n--- QUY TẮC PHẢN HỒI (BẮT BUỘC) ---\n"
-            "Mỗi lượt phản hồi CHỈ GỒM 2 DÒNG:\n"
-            "THOUGHT: <suy nghĩ>\n"
-            "ACTION: <tên_hàm>(<đối_số>)\n\n"
-            "Actions được phép:\n"
-            "1. read_source(path) — Đọc file.\n"
-            "2. write_source(path, content) — Ghi file. Dùng r\"\"\"...\"\"\" cho multi-line code.\n"
-            "3. execute_command(cmd) — Chạy lệnh. Chỉ: dotnet build/test/restore/clean, git status/diff/add.\n"
-            "4. finish_task(summary) — Kết thúc pha.\n"
-            "🚨 CHỈ CHỌN DUY NHẤT 1 ACTION. Không dùng action khác ngoài 4 action trên.\n"
+        # LƯU Ý: Đã loại bỏ react_instruction cũ (THOUGHT: ... ACTION: ...)
+        # vì Native Function Calling tự xử lý format qua tool definitions.
+        tool_usage_note = (
+            "\n\n--- HƯỚNG DẪN SỬ DỤNG CÔNG CỤ ---\n"
+            "Bạn có quyền sử dụng các công cụ sau thông qua Native Function Calling:\n"
+            "1. view_source(file_path, start_line?, end_line?) — Đọc file. Hỗ trợ phân trang (start_line, end_line) cho file dài.\n"
+            "2. write_source(file_path, content) — Ghi file mới hoặc ghi đè file có sẵn.\n"
+            "3. execute_command(command) — Chạy lệnh. Chỉ: dotnet build/test/restore/clean, git status/diff/add.\n"
+            "4. finish_task(summary) — Kết thúc pha với báo cáo.\n"
+            "🚨 MỖI LƯỢT CHỈ GỌI ĐÚNG 1 TOOL. Luôn suy nghĩ trước khi hành động.\n"
             "---\n"
         )
 
@@ -961,7 +952,7 @@ class AIDeveloperHarness:
             "\n\n--- KIẾN TRÚC DỰ ÁN ---\n"
             "Clean Architecture: Domain -> Application -> Infrastructure -> Controllers.\n"
             "Xem directory tree và các file .cs hiện có trong codebase để biết namespace convention.\n"
-            f"Tham khảo [docs/guides/DDD_GUIDE.md](file:///{root_dir.replace('\\', '/')}/docs/guides/DDD_GUIDE.md) cho design guidelines chi tiết.\n"
+            f"Tham khảo [docs/guides/DDD_GUIDE.md](file:///{root_dir.replace(chr(92), '/')}/docs/guides/DDD_GUIDE.md) cho design guidelines chi tiết.\n"
             "---\n"
         )
 
@@ -972,12 +963,12 @@ class AIDeveloperHarness:
             "- Phân tích kiến trúc: Cần tạo mới/chỉnh sửa các thực thể (Domain), DTO/Queries/Commands/Handlers (Application), AppDbContext/Repository (Infrastructure), Controllers (Web/API).\n"
             "- Đặc tả chi tiết các thay đổi.\n"
             "- Danh sách các test cases cần viết trước (TDD).\n"
-            "Sau khi hoàn thành bản kế hoạch, bạn BẮT BUỘC phải gọi `finish_task('<nội dung kế hoạch chi tiết bằng Markdown>')` để Kỹ sư con người phê duyệt.\n"
-            "Chính sách lập trình bắt buộc: dùng read_source để đọc CODING_POLICY.md nếu cần.\n"
-            "Bài học kinh nghiệm: dùng read_source để đọc scripts/harness_lessons.md nếu cần."
+            "Sau khi hoàn thành bản kế hoạch, bạn BẮT BUỘC phải gọi `finish_task` với nội dung kế hoạch chi tiết bằng Markdown để Kỹ sư con người phê duyệt.\n"
+            "Chính sách lập trình bắt buộc: dùng view_source để đọc CODING_POLICY.md nếu cần.\n"
+            "Bài học kinh nghiệm: dùng view_source để đọc scripts/harness_lessons.md nếu cần."
         )
         planner_system += architecture_guidelines
-        planner_system += react_instruction
+        planner_system += tool_usage_note
 
         testwriter_system = (
             "Bạn là một QA/Developer chuyên viết unit test và integration test sử dụng xUnit và FluentAssertions cho dự án .NET 9 FloraCore.\n"
@@ -985,8 +976,8 @@ class AIDeveloperHarness:
             "Bạn chỉ được phép ghi hoặc sửa đổi các tệp kiểm thử trong thư mục kiểm thử (ví dụ: FloraCore.Tests hoặc các file có hậu tố Tests.cs).\n"
             "Tuyệt đối KHÔNG ĐƯỢC sửa đổi bất kỳ tệp code production nào (trong Domain, Application, Infrastructure, Controllers).\n"
             "Sau khi viết xong các test cases, hãy chạy `dotnet build` để đảm bảo chúng biên dịch thành công. LƯU Ý: các test cases có thể thất bại khi chạy vì code production chưa được viết.\n"
-            "🚨 Trước khi viết test cho bất kỳ class nào: PHẢI dùng `read_source` để đọc mã nguồn production nhằm kiểm tra chính xác namespace, constructor signature và methods.\n"
-            f"Mẫu cấu trúc test: xem [FloraCore.Tests/Application/WebsiteInfo/](file:///{root_dir.replace('\\', '/')}/FloraCore.Tests/Application/WebsiteInfo/).\n"
+            "🚨 Trước khi viết test cho bất kỳ class nào: PHẢI dùng `view_source` để đọc mã nguồn production nhằm kiểm tra chính xác namespace, constructor signature và methods.\n"
+            f"Mẫu cấu trúc test: xem [FloraCore.Tests/Application/WebsiteInfo/](file:///{root_dir.replace(chr(92), '/')}/FloraCore.Tests/Application/WebsiteInfo/).\n"
             "\n--- 🧪 TEST PATTERNS (đọc để tránh lỗi thường gặp) ---\n"
             "1. Mock IQueryable + async: Handler gọi ToListAsync(). Dùng `source.AsAsyncQueryable()` thay vì `source.AsQueryable()`.\n"
             "   System.Linq.AsyncQueryable không support với List.AsQueryable().\n"
@@ -999,17 +990,17 @@ class AIDeveloperHarness:
             "Đọc scripts/harness_lessons.md để biết thêm chi tiết từng pattern.\n"
             "Chính sách lập trình: đọc CODING_POLICY.md nếu cần.\n"
             "Bài học kinh nghiệm: đọc scripts/harness_lessons.md nếu cần.\n"
-            "Gọi `finish_task('<báo cáo các file test đã viết>')` khi hoàn thành."
+            "Gọi `finish_task` với báo cáo các file test đã viết khi hoàn thành."
         )
         testwriter_system += architecture_guidelines
-        testwriter_system += react_instruction
+        testwriter_system += tool_usage_note
 
         developer_system = (
             "Bạn là một Kỹ sư .NET 9 Senior, làm việc trên dự án FloraCore (Clean Architecture + CQRS + MediatR).\n"
             "Nhiệm vụ của bạn là hiện thực hóa logic nghiệp vụ trong các lớp Domain, Application, Infrastructure, Controllers dựa trên Bản kế hoạch (Execution Plan) và vượt qua toàn bộ các test cases đã được viết.\n"
-            "Hãy tuân thủ nghiêm ngặt chính sách lập trình. Nếu build báo lỗi CS0246 (namespace) hoặc CS1729 (constructor signature), hãy dùng read_source('CODING_POLICY.md') để xem rules cụ thể.\n"
+            "Hãy tuân thủ nghiêm ngặt chính sách lập trình. Nếu build báo lỗi CS0246 (namespace) hoặc CS1729 (constructor signature), hãy dùng view_source('CODING_POLICY.md') để xem rules cụ thể.\n"
             "\n🚨 NGUYÊN TẮC CHẨN ĐOÁN LỖI (ROOT CAUSE ANALYSIS - RCA):\n"
-            "Trước khi thực hiện bất kỳ chỉnh sửa mã nguồn nào để fix build hoặc test, bạn BẮT BUỘC phải phân tích và mô tả rõ trong phần THOUGHT:\n"
+            "Trước khi thực hiện bất kỳ chỉnh sửa mã nguồn nào để fix build hoặc test, bạn BẮT BUỘC phải phân tích và mô tả rõ trong phần suy nghĩ (thought):\n"
             "  1. SYMPTOMS: Lỗi thực tế và thông báo lỗi nhận được là gì?\n"
             "  2. TRACE: Lỗi xảy ra ở dòng nào trong code production/test, đường đi của call stack?\n"
             "  3. ROOT CAUSE: Tại sao lỗi xảy ra (lệch kiểu dữ liệu, thiếu đăng ký Dependency Injection, logic nghiệp vụ bị sai lệch)?\n"
@@ -1022,7 +1013,7 @@ class AIDeveloperHarness:
             "   - KHÔNG được gọi `execute_command` trong Bước 1.\n"
             "\nBƯỚC 2 - BUILD CHỈ ĐỊNH (production-only):\n"
             "   - Gọi `execute_command('dotnet build FloraCore.csproj')` để chỉ build project production.\n"
-            "   - Nếu build FAIL: đọc compiler errors (CSxxxx) từ OBSERVATION, dùng read_source + write_source để sửa, build lại.\n"
+            "   - Nếu build FAIL: đọc compiler errors (CSxxxx) từ OBSERVATION, dùng view_source + write_source để sửa, build lại.\n"
             "\nBƯỚC 3 - CHẠY TEST (chỉ sau khi Build Success):\n"
             "   - Gọi `execute_command('dotnet test --filter FullyQualifiedName~<FEATURE_KEYWORD>')` để chạy test.\n"
             "   - Thay <FEATURE_KEYWORD> bằng keyword rút từ Execution Plan hoặc tên feature (VD: statistics, cart, product, auth, order, user, post, category, search, website, chat, file, inbox).\n"
@@ -1049,20 +1040,20 @@ class AIDeveloperHarness:
             "6. Factory: Dùng CustomWebApplicationFactory.\n"
             "Đọc scripts/harness_lessons.md để biết thêm chi tiết từng pattern.\n"
             "\nBƯỚC 4 - BÁO CÁO:\n"
-            "   - Chỉ khi Bước 2 và 3 đều thành công, gọi `finish_task('...')`.\n"
+            "   - Chỉ khi Bước 2 và 3 đều thành công, gọi `finish_task`.\n"
             "\n🚨 QUY TẮC PHÁT TRIỂN QUAN TRỌNG:\n"
             "- BẮT BUỘC C# 12+ Primary Constructors cho DI classes.\n"
             "- BẮT BUỘC `ArgumentNullException.ThrowIfNull(dependency)` đầu constructor.\n"
             "- Tham khảo file mẫu:\n"
-            f"  * [GenericRepository.cs](file:///{root_dir.replace('\\', '/')}/Infrastructure/Repositories/GenericRepository.cs)\n"
-            f"  * [ProductRepository.cs](file:///{root_dir.replace('\\', '/')}/Infrastructure/Repositories/ProductRepository.cs)\n"
-            f"  * [UnitOfWork.cs](file:///{root_dir.replace('\\', '/')}/Infrastructure/Data/UnitOfWork.cs)\n"
-            f"  * Handlers in [Application/Features/WebsiteInfo/Commands](file:///{root_dir.replace('\\', '/')}/Application/Features/WebsiteInfo/Commands/)\n"
-            f"  * Controller mẫu: [OrdersController.cs](file:///{root_dir.replace('\\', '/')}/Controllers/OrdersController.cs) (Primary Constructor)\n"
+            f"  * [GenericRepository.cs](file:///{root_dir.replace(chr(92), '/')}/Infrastructure/Repositories/GenericRepository.cs)\n"
+            f"  * [ProductRepository.cs](file:///{root_dir.replace(chr(92), '/')}/Infrastructure/Repositories/ProductRepository.cs)\n"
+            f"  * [UnitOfWork.cs](file:///{root_dir.replace(chr(92), '/')}/Infrastructure/Data/UnitOfWork.cs)\n"
+            f"  * Handlers in [Application/Features/WebsiteInfo/Commands](file:///{root_dir.replace(chr(92), '/')}/Application/Features/WebsiteInfo/Commands/)\n"
+            f"  * Controller mẫu: [OrdersController.cs](file:///{root_dir.replace(chr(92), '/')}/Controllers/OrdersController.cs) (Primary Constructor)\n"
             "Bài học kinh nghiệm: đọc scripts/harness_lessons.md nếu cần.\n"
         )
         developer_system += architecture_guidelines
-        developer_system += react_instruction
+        developer_system += tool_usage_note
 
         # --- CALLBACK PHA 1: PLANNING ---
         def on_planner_finish(plan_content: str):
@@ -1221,12 +1212,12 @@ class AIDeveloperHarness:
                     feedback_msg += "\n\nHãy dừng `finish_task` lại và sử dụng `write_source` để viết đầy đủ các file production code này trước khi build. VIẾT HẾT -> BUILD."
                     return False, feedback_msg
                 
-                return False, "PRODUCTION CODE BUILD FAILED. Hãy viết THÊM production code hoặc sửa lỗi compiler trước khi build lại. HINT: Lỗi namespace/convention? Dùng `read_source('CODING_POLICY.md')` để xem rules. Xem lỗi compiler bên dưới để định hướng file nào cần tạo/sửa:\n" + "\n".join(errs)
+                return False, "PRODUCTION CODE BUILD FAILED. Hãy viết THÊM production code hoặc sửa lỗi compiler trước khi build lại. HINT: Lỗi namespace/convention? Dùng `view_source('CODING_POLICY.md')` để xem rules. Xem lỗi compiler bên dưới để định hướng file nào cần tạo/sửa:\n" + "\n".join(errs)
                 
             print("🧹 Kiểm tra Coding Policy tĩnh...")
             val_code, val_out = self.run_policy_validation()
             if val_code != 0:
-                return False, "Phát hiện lỗi vi phạm Coding Policy (Tĩnh). Dùng `read_source('CODING_POLICY.md')` để xem rules cụ thể, tìm section liên quan đến lỗi bên dưới, rồi sửa code bằng `write_source`. Chi tiết:\n" + val_out
+                return False, "Phát hiện lỗi vi phạm Coding Policy (Tĩnh). Dùng `view_source('CODING_POLICY.md')` để xem rules cụ thể, tìm section liên quan đến lỗi bên dưới, rồi sửa code bằng `write_source`. Chi tiết:\n" + val_out
                 
             print("⚙️ Chạy tests hệ thống (chỉ chạy test liên quan đến feature mới)...")
             filter_keyword = getattr(self, 'test_filter_keyword', 'test')
