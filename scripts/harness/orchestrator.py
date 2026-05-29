@@ -1361,52 +1361,43 @@ class AIDeveloperHarness:
                 else:
                     return False, f"Evaluator từ chối với điểm {score:.2f} < {self.pass_threshold}.\nBáo cáo:\n{report}"
                     
-            # Fix 8: Kiểm tra xem Developer agent đã build+test thành công ở lượt cuối chưa
-            # Nếu dev_report cho thấy build+test đã pass → skip duplicate run
-            agent_already_verified = (
-                "build" in dev_report.lower() and "success" in dev_report.lower()
-                and ("test" in dev_report.lower() and ("pass" in dev_report.lower() or "thành công" in dev_report.lower()))
-            )
-            
-            if agent_already_verified:
-                print("⚡ [Harness]: Developer đã xác nhận build+test thành công. Bỏ qua build/test trùng lặp, chạy thẳng GAN Evaluation.")
-            else:
-                print("⚙️ Chạy build hệ thống (production code)...")
-                code, out = run_dotnet_command("dotnet build FloraCore.csproj")
-                if code != 0:
-                    errs = extract_compiler_errors(out)
-                    missing_files = []
-                    if hasattr(self, 'planner_production_files') and self.planner_production_files:
-                        for file in self.planner_production_files:
-                            file_path = os.path.join(root_dir, file) if not os.path.isabs(file) else file
-                            if not os.path.exists(file_path):
-                                missing_files.append(file)
-                    
-                    if missing_files:
-                        feedback_msg = "PRODUCTION CODE THIẾU FILE:\n"
-                        feedback_msg += "\n".join([f"- {file}" for file in missing_files])
-                        feedback_msg += "\n\nHãy dừng `finish_task` lại và sử dụng `write_source` để viết đầy đủ các file production code này trước khi build. VIẾT HẾT -> BUILD."
-                        return False, feedback_msg
-                    
-                    return False, "PRODUCTION CODE BUILD FAILED. Hãy viết THÊM production code hoặc sửa lỗi compiler trước khi build lại. HINT: Lỗi namespace/convention? Dùng `view_source('CODING_POLICY.md')` để xem rules. Xem lỗi compiler bên dưới để định hướng file nào cần tạo/sửa:\n" + "\n".join(errs)
-                    
-                print("🧹 Kiểm tra Coding Policy tĩnh...")
-                val_code, val_out = self.run_policy_validation()
-                if val_code != 0:
-                    return False, "Phát hiện lỗi vi phạm Coding Policy (Tĩnh). Dùng `view_source('CODING_POLICY.md')` để xem rules cụ thể, tìm section liên quan đến lỗi bên dưới, rồi sửa code bằng `write_source`. Chi tiết:\n" + val_out
-                    
-                print("⚙️ Chạy tests hệ thống (chỉ chạy test liên quan đến feature mới)...")
-                filter_keyword = getattr(self, 'test_filter_keyword', 'test')
-                t_code, t_out = run_dotnet_command(f"dotnet test --filter FullyQualifiedName~{filter_keyword}")
-                if t_code != 0:
-                    errs = extract_test_errors(t_out)
-                    tags = set()
-                    for e in errs:
-                        for line in e.splitlines():
-                            if line.strip().startswith("🏷️"):
-                                tags.add(line.strip())
-                    tag_summary = "\n".join(sorted(tags)) if tags else ""
-                    return False, "TESTS FAIL: Sửa tất cả lỗi dưới đây TRONG MỘT LẦN (không chạy lại test sau mỗi lỗi).\n\n" + (tag_summary + "\n\n" if tag_summary else "") + "\n".join(errs)
+            # Luôn biên dịch và chạy kiểm thử thực tế trên đĩa cứng để xác thực, không tin vào văn bản báo cáo
+            print("⚙️ Chạy build hệ thống (production code)...")
+            code, out = run_dotnet_command("dotnet build FloraCore.csproj")
+            if code != 0:
+                errs = extract_compiler_errors(out)
+                missing_files = []
+                if hasattr(self, 'planner_production_files') and self.planner_production_files:
+                    for file in self.planner_production_files:
+                        file_path = os.path.join(root_dir, file) if not os.path.isabs(file) else file
+                        if not os.path.exists(file_path):
+                            missing_files.append(file)
+                
+                if missing_files:
+                    feedback_msg = "PRODUCTION CODE THIẾU FILE:\n"
+                    feedback_msg += "\n".join([f"- {file}" for file in missing_files])
+                    feedback_msg += "\n\nHãy dừng `finish_task` lại và sử dụng `write_source` để viết đầy đủ các file production code này trước khi build. VIẾT HẾT -> BUILD."
+                    return False, feedback_msg
+                
+                return False, "PRODUCTION CODE BUILD FAILED. Hãy viết THÊM production code hoặc sửa lỗi compiler trước khi build lại. HINT: Lỗi namespace/convention? Dùng `view_source('CODING_POLICY.md')` để xem rules. Xem lỗi compiler bên dưới để định hướng file nào cần tạo/sửa:\n" + "\n".join(errs)
+                
+            print("🧹 Kiểm tra Coding Policy tĩnh...")
+            val_code, val_out = self.run_policy_validation()
+            if val_code != 0:
+                return False, "Phát hiện lỗi vi phạm Coding Policy (Tĩnh). Dùng `view_source('CODING_POLICY.md')` để xem rules cụ thể, tìm section liên quan đến lỗi bên dưới, rồi sửa code bằng `write_source`. Chi tiết:\n" + val_out
+                
+            print("⚙️ Chạy tests hệ thống (chỉ chạy test liên quan đến feature mới)...")
+            filter_keyword = getattr(self, 'test_filter_keyword', 'test')
+            t_code, t_out = run_dotnet_command(f"dotnet test --filter FullyQualifiedName~{filter_keyword}")
+            if t_code != 0:
+                errs = extract_test_errors(t_out)
+                tags = set()
+                for e in errs:
+                    for line in e.splitlines():
+                        if line.strip().startswith("🏷️"):
+                            tags.add(line.strip())
+                tag_summary = "\n".join(sorted(tags)) if tags else ""
+                return False, "TESTS FAIL: Sửa tất cả lỗi dưới đây TRONG MỘT LẦN (không chạy lại test sau mỗi lỗi).\n\n" + (tag_summary + "\n\n" if tag_summary else "") + "\n".join(errs)
                 
             score, report = self.run_gan_evaluation(task_description)
             print(f"\n🏆 [EVALUATION SCORECARD]: THANG ĐIỂM ĐẠT ĐƯỢC: {score:.2f}/10.0 (Yêu cầu tối thiểu: {self.pass_threshold})")

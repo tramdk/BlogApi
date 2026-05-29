@@ -61,6 +61,12 @@ class TelegramHarness(AIDeveloperHarness):
     def ask_approval(self, message: str, force_ask: bool = False) -> bool:
         if self.auto_approve:
             return True
+        # Flush stdout để đảm bảo toàn bộ log và bản kế hoạch được gửi đi trước khi block
+        if hasattr(sys.stdout, "flush"):
+            try:
+                sys.stdout.flush()
+            except Exception:
+                pass
         self._approval_evt.clear()
         self._approval_val = False
         self._msg_queue.put(("approval", (message, self._chat_id)))

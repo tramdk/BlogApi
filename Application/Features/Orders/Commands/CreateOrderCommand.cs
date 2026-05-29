@@ -11,18 +11,10 @@ namespace FloraCore.Application.Features.Orders.Commands;
 
 public record CreateOrderCommand(Guid UserId, Address ShippingAddress, string IdempotencyKey = "") : IRequest<Guid>, IIdempotentCommand;
 
-public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Guid>
+public class CreateOrderCommandHandler(IOrderRepository repository, IAdminNotificationService adminNotificationService) : IRequestHandler<CreateOrderCommand, Guid>
 {
-    private readonly IOrderRepository _repository;
-    private readonly IAdminNotificationService _adminNotificationService;
-
-    public CreateOrderCommandHandler(IOrderRepository repository, IAdminNotificationService adminNotificationService)
-    {
-        ArgumentNullException.ThrowIfNull(repository);
-        ArgumentNullException.ThrowIfNull(adminNotificationService);
-        _repository = repository;
-        _adminNotificationService = adminNotificationService;
-    }
+    private readonly IOrderRepository _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+    private readonly IAdminNotificationService _adminNotificationService = adminNotificationService ?? throw new ArgumentNullException(nameof(adminNotificationService));
 
     public async Task<Guid> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
