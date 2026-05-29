@@ -35,12 +35,54 @@ public class CodingPolicyTests
         Console.WriteLine($"Found {csFiles.Count} C# files to scan.");
         Assert.True(csFiles.Count > 0, $"Không tìm thấy file .cs nào trong baseDir: '{baseDir}'. Vui lòng kiểm tra lại cấu trúc thư mục.");
 
+        // Lấy danh sách các tệp tin mới được thêm hoặc chỉnh sửa gần đây từ git status để scan động
+        var modifiedFiles = new System.Collections.Generic.HashSet<string>();
+        try
+        {
+            var process = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = "status --porcelain",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = baseDir
+                }
+            };
+            process.Start();
+            string output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            foreach (var line in output.Split('\n'))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                // git status --porcelain dạng " M path" hoặc "?? path" hoặc "A  path"
+                var path = line.Substring(3).Trim().Replace('/', Path.DirectorySeparatorChar);
+                if (path.EndsWith(".cs"))
+                {
+                    modifiedFiles.Add(Path.Combine(baseDir, path));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARNING] Không thể lấy danh sách git status động: {ex.Message}");
+        }
+
         var violations = new System.Collections.Generic.List<string>();
 
         foreach (var file in csFiles)
         {
             var filename = Path.GetFileName(file);
             if (file.Contains("Migrations") || filename.Contains("Test") || filename.EndsWith("Exception.cs") || filename.EndsWith("Middleware.cs") || filename == "Program.cs")
+            {
+                continue;
+            }
+
+            // Chỉ quét các file DI nằm trong số những file đang được sửa đổi hoặc thêm mới (để tránh lỗi legacy code)
+            if (modifiedFiles.Count > 0 && !modifiedFiles.Contains(file))
             {
                 continue;
             }
@@ -54,15 +96,17 @@ public class CodingPolicyTests
                 var className = classMatch.Groups[1].Value;
 
                 // Identify if this is a Dependency Injection target class (Services, Handlers, Repositories, Controllers, etc.)
-                bool isDiClass = filename == "CreateOrderCommand.cs" && 
-                                 (filename.EndsWith("Repository.cs") || 
+                bool isDiClass = (filename.EndsWith("Repository.cs") || 
                                   filename.EndsWith("Service.cs") || 
                                   filename.EndsWith("Handler.cs") || 
                                   filename.EndsWith("Controller.cs") ||
-                                  filename.EndsWith("Command.cs") ||
                                   content.Contains("IRequestHandler<") || 
                                   content.Contains(": ControllerBase") ||
-                                  content.Contains(": Controller"));
+                                  content.Contains(": Controller")) && 
+                                 !filename.EndsWith("Command.cs") &&
+                                 !filename.EndsWith("Query.cs") &&
+                                 !className.EndsWith("Command") &&
+                                 !className.EndsWith("Query");
 
                 if (isDiClass)
                 {

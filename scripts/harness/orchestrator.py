@@ -6,6 +6,7 @@ import json
 import time
 import subprocess
 import copy
+from collections import Counter
 
 try:
     from dotenv import load_dotenv
@@ -82,7 +83,7 @@ class AIDeveloperHarness:
         self.role_max_iterations = {
             "Planner": int(os.getenv("HARNESS_PLANNER_MAX_ITER") or 8),
             "TestWriter": int(os.getenv("HARNESS_TESTWRITER_MAX_ITER") or 12),
-            "Developer": int(os.getenv("HARNESS_DEVELOPER_MAX_ITER") or 20),
+            "Developer": int(os.getenv("HARNESS_DEVELOPER_MAX_ITER") or 40),
             "Enricher": 3
         }
         
@@ -117,6 +118,8 @@ class AIDeveloperHarness:
 
         # Tự động nạp chính sách lập trình cục bộ
         self.policy_content = ""
+        self.agents_rules = ""
+        self.agents_md_path = os.path.join(root_dir, "AGENTS.md")
         try:
             for p_file in self.policy_files:
                 p_path = os.path.join(root_dir, p_file)
@@ -157,6 +160,8 @@ class AIDeveloperHarness:
         if self.mock_mode:
             print("[CẢNH BÁO]: Không tìm thấy khóa API của GEMINI, OPENAI, CLAUDE hoặc DEEPSEEK.")
             print("Harness sẽ chạy ở chế độ giả lập (Mock LLM) để minh họa quy trình.")
+        else:
+            print(f"[Harness]: Đã tìm thấy khóa API cho {self.provider.upper()}. Đang khởi tạo LLM Client...")
             
         self.llm_router = LLMRouter(
             provider=self.provider,
@@ -184,7 +189,7 @@ class AIDeveloperHarness:
         harness_dir = os.path.dirname(os.path.abspath(__file__))
         scripts_dir = os.path.dirname(harness_dir)
         root_dir = os.path.dirname(scripts_dir)
-        return build_cache_contents(root_dir, self.policy_content, self.lessons_content, self.skills_contents)
+        return build_cache_contents(root_dir, self.policy_content, self.lessons_content, self.skills_contents, self.agents_rules)
 
     def extract_test_filter_keyword(self, plan: str, task_description: str) -> str:
         """Trích xuất keyword để filter test từ plan hoặc task description."""
@@ -247,10 +252,13 @@ class AIDeveloperHarness:
             )
         elif action_name == "write_source":
             filepath = action_args.get("file_path", "")
+            content = action_args.get("content", "")
+            res = write_source_file(filepath, content)
+            status = "SUCCESS" if "thành công" in res else "ERROR"
             return format_observation(
-                status="SUCCESS",
-                summary=f"(MOCK) Ghi file '{filepath}' thành công.",
-                details="Ghi file thành công lên hệ thống giả lập.",
+                status=status,
+                summary=f"(MOCK) Ghi file '{filepath}' thành công." if status == "SUCCESS" else f"(MOCK) Lỗi ghi file '{filepath}': {res}",
+                details=res,
                 artifacts=[filepath]
             )
         return format_observation(
@@ -582,6 +590,7 @@ class AIDeveloperHarness:
         self.test_failure_history = []
         self.error_signature_history = []  # Fix 4: track compiler error signatures
         self.finish_task_rejections = 0  # Fix 5: cap finish_task rejection budget
+        self.write_count_without_build = 0  # Fix 7: force build after N writes
         
         # Xác định tier model để tối giản hóa phản hồi lỗi format (arXiv:2605.26731)
         is_chat_model = self.provider in ["gemini", "openai"] and not any(kw in (os.getenv("GEMINI_API_KEY") or "").lower() for kw in ["thinking", "o1", "o3"])
@@ -732,12 +741,14 @@ class AIDeveloperHarness:
                     allowed_cmds = self.allowed_cmds
                     is_git = cmd.startswith("git ") and any(sub in cmd for sub in ["status", "add", "diff"])
                     
-                    if "commit" in cmd.lower():
+                    destructive_git = ["commit", "push --force", "push -f", "rebase", "reset --hard", "cherry-pick", "merge"]
+                    if any(kw in cmd.lower() for kw in destructive_git):
+                        blocked = [kw for kw in destructive_git if kw in cmd.lower()][0]
                         observation = format_observation(
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
-                            details="Harness nghiêm cấm chạy lệnh git commit. Mọi commit phải do kỹ sư con người thực hiện thủ công.",
-                            next_actions=["Chỉ dùng git status, git diff hoặc git add. Không dùng git commit."]
+                            details=f"Harness nghiêm cấm lệnh 'git {blocked}'. Mọi thao tác nguy hiểm (commit, push --force, rebase, reset --hard, cherry-pick, merge) phải do kỹ sư con người thực hiện thủ công.",
+                            next_actions=["Chỉ dùng git status, git diff hoặc git add. Không dùng git commit hay destructive commands."]
                         )
                     elif not any(cmd.startswith(allowed) for allowed in allowed_cmds) and not is_git:
                         observation = format_observation(
@@ -753,6 +764,11 @@ class AIDeveloperHarness:
                             status = "SUCCESS" if code == 0 else "ERROR"
                             details = out[:3000] if "build" in cmd else out[:1000]
                             test_fail_count = 0
+                            # Reset write-without-build counter khi build được gọi
+                            if "build" in cmd:
+                                if self.write_count_without_build > 0:
+                                    print(f"🔄 [Harness]: Reset write-without-build counter ({self.write_count_without_build} → 0) sau build.")
+                                self.write_count_without_build = 0
                             if code != 0:
                                 if "build" in cmd:
                                     comp_errs = extract_compiler_errors(out)
@@ -764,17 +780,20 @@ class AIDeveloperHarness:
                                             self.compiler_error_history = []
                                         self.compiler_error_history.append(comp_errs)
                                         if len(self.compiler_error_history) >= 3 and self.compiler_error_history[-1] == self.compiler_error_history[-2] == self.compiler_error_history[-3]:
-                                            print("\n🚨 [Harness Early Exit]: Lỗi compiler trùng lặp liên tiếp 3 lần. Đang FORCE finish_task...")
-                                            err_report = "FORCE EXIT: Lỗi compiler lặp lại liên tiếp 3 lần:\n" + "\n".join(comp_errs)
-                                            return err_report
+                                            print(f"\n🚨 [Harness Loop Warning]: Lỗi compiler trùng lặp liên tiếp 3 lần. Mở rộng budget.")
+                                            details += "\n\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Lỗi compiler lặp lại 3 lần. Budget đã mở rộng. Hãy đổi chiến thuật! ĐỌC kỹ interface/class cần implement trước khi viết code.\n"
+                                            effective_max += 10
+                                            print(f"🔄 [Harness]: Mở rộng budget thêm 10 → {effective_max} iterations.")
                                         
-                                        # Fix 4: Error-signature loop detection (catches bypass via minor content changes)
+                                        # Fix 4: Error-signature loop detection — đếm tổng số lần, không chỉ liên tiếp
                                         error_codes = tuple(sorted(set(re.findall(r'CS\d+', "\n".join(comp_errs)))))
                                         self.error_signature_history.append(error_codes)
-                                        if len(self.error_signature_history) >= 4 and len(set(self.error_signature_history[-4:])) == 1:
-                                            print(f"\n🚨 [Harness Early Exit]: Cùng set lỗi compiler {error_codes} xuất hiện 4 lần liên tiếp dù agent thay đổi code. FORCE exit.")
-                                            err_report = f"FORCE EXIT: Error signature {error_codes} không thay đổi sau 4 lần build:\n" + "\n".join(comp_errs)
-                                            return err_report
+                                        sig_counts = Counter(self.error_signature_history)
+                                        if sig_counts[error_codes] >= 4:
+                                            print(f"\n🚨 [Harness Loop Warning]: Cùng set lỗi compiler {error_codes} xuất hiện {sig_counts[error_codes]} lần (tổng cộng). Mở rộng budget.")
+                                            details += f"\n\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Cùng set lỗi {error_codes} xuất hiện {sig_counts[error_codes]} lần. Budget đã mở rộng. Hãy đổi chiến thuật! Xem kỹ file test để biết signature đúng.\n"
+                                            effective_max += 10
+                                            print(f"🔄 [Harness]: Mở rộng budget thêm 10 → {effective_max} iterations.")
                                 elif "test" in cmd:
                                     test_errs = extract_test_errors(out)
                                     if test_errs:
@@ -786,16 +805,17 @@ class AIDeveloperHarness:
                                             tags = [l for l in err.splitlines() if l.strip().startswith("🏷️")]
                                             tags_only.extend(tags)
                                         self.test_failure_history.append(tags_only)
-                                        if len(self.test_failure_history) >= 4 and self.test_failure_history[-1] == self.test_failure_history[-2] == self.test_failure_history[-3] == self.test_failure_history[-4]:
-                                            print("\n🚨 [Harness Early Exit]: Danh sách lỗi test không đổi liên tiếp 4 lần. Dừng Agent để tránh lãng phí token.")
-                                            rollback_log = self.selective_rollback()
-                                            print(f"⚠️ Hậu quả Rollback:\n{rollback_log}")
-                                            return "FAIL: Đã kích hoạt ngắt khẩn cấp do lỗi test không thay đổi."
-                                        elif len(self.test_failure_history) >= 3 and self.test_failure_history[-1] == self.test_failure_history[-2] == self.test_failure_history[-3]:
+                                        test_sig_counts = Counter(self.test_failure_history)
+                                        if test_sig_counts[tags_only] >= 4:
+                                            print(f"\n🚨 [Harness Loop Warning]: Cùng set lỗi test xuất hiện {test_sig_counts[tags_only]} lần (tổng cộng). Mở rộng budget.")
+                                            details += f"\n\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Cùng set lỗi test lặp lại {test_sig_counts[tags_only]} lần. Budget đã mở rộng. Hãy đổi chiến thuật!\n"
+                                            details += "Hướng dẫn: dùng `view_source` đọc file test và xem kỹ expected behavior, kiểm tra lại Mock setups.\n"
+                                            effective_max += 10
+                                            print(f"🔄 [Harness]: Mở rộng budget thêm 10 → {effective_max} iterations.")
+                                        elif test_sig_counts[tags_only] >= 3:
                                                 loop_warning_test = (
-                                                    "\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Danh sách test case thất bại hoàn toàn KHÔNG THAY ĐỔI sau 3 lần chạy test liên tiếp.\n"
-                                                    "Điều này có nghĩa là các chỉnh sửa mã nguồn gần đây của bạn không có bất kỳ tác dụng nào đối với các lỗi kiểm thử hiện tại.\n"
-                                                    "Hãy thay đổi chiến thuật: đọc kỹ stack trace lỗi, kiểm tra lại Mock setups, hoặc đọc các file kiểm thử tương ứng để hiểu logic."
+                                                    f"\n🚨 [CẢNH BÁO VÒNG LẶP HỆ THỐNG]: Cùng set lỗi test xuất hiện {test_sig_counts[tags_only]} lần. Hãy đổi chiến thuật.\n"
+                                                    "Hãy đọc kỹ stack trace lỗi, kiểm tra lại Mock setups, hoặc đọc các file kiểm thử tương ứng để hiểu logic."
                                                 )
                                                 details = loop_warning_test + "\n\n" + details
 
@@ -916,79 +936,14 @@ class AIDeveloperHarness:
                         elif role == "Planner" and not (
                             normalized_path.startswith("docs/")
                             or "execution_plan.md" in normalized_path
-                            # Cho phép Planner ghi stub/skeleton files vào production directories
-                            or normalized_path.startswith("domain/")
-                            or normalized_path.startswith("application/")
-                            or normalized_path.startswith("infrastructure/")
-                            or normalized_path.startswith("controllers/")
                         ):
                             observation = format_observation(
                                 status="ERROR",
                                 summary="Ràng buộc vai trò Planner.",
-                                details="Với vai trò Planner, bạn chỉ được phép ghi kế hoạch vào docs/ hoặc tạo file stub (khung xương rỗng) vào Domain/, Application/, Infrastructure/, Controllers/. Không được ghi code logic nghiệp vụ thực sự.",
-                                next_actions=["Ghi kế hoạch vào docs/plans/execution_plan.md, hoặc tạo stub class rỗng vào đúng thư mục."],
+                                details="Với vai trò Planner, bạn CHỈ được phép ghi kế hoạch vào docs/. Tuyệt đối KHÔNG được ghi file .cs production, không gọi execute_command.",
+                                next_actions=["Ghi kế hoạch vào docs/plans/execution_plan.md, sau đó gọi finish_task."],
                                 artifacts=[filepath]
                             )
-                        # Fix 3: Content-level validation — Planner chỉ được tạo stub, không logic thực sự
-                        elif role == "Planner" and normalized_path.endswith(".cs") and not normalized_path.startswith("docs/"):
-                            logic_keywords = [
-                                "await ", ".Where(", ".Select(", ".ToListAsync(",
-                                ".SaveChangesAsync(", ".Publish(", ".SendAsync(",
-                                "foreach (", "foreach(", "try {", "try\n",
-                                "catch (", "catch(",
-                            ]
-                            stub_markers = [
-                                "NotImplementedException", "// TODO", "// STUB",
-                                "throw new System.NotImplementedException"
-                            ]
-                            has_logic = any(kw in content for kw in logic_keywords)
-                            has_stub = any(kw in content for kw in stub_markers)
-                            # Chấp nhận nếu: không có logic HOẶC có stub marker
-                            if has_logic and not has_stub:
-                                observation = format_observation(
-                                    status="ERROR",
-                                    summary="Planner chỉ được tạo stub, không được viết logic nghiệp vụ.",
-                                    details=(
-                                        f"File .cs '{filepath}' chứa logic nghiệp vụ thực sự (await, LINQ, foreach, try/catch...) mà không có stub marker.\n"
-                                        "Planner chỉ được tạo skeleton class rỗng:\n"
-                                        "  - Namespace + class declaration\n"
-                                        "  - Properties\n"
-                                        "  - Constructor signature\n"
-                                        "  - Method bodies: throw new NotImplementedException();\n"
-                                    ),
-                                    next_actions=["Viết lại file với method bodies chứa 'throw new NotImplementedException();' thay vì logic thực."],
-                                    artifacts=[filepath]
-                                )
-                            else:
-                                # Valid stub — track và cho phép ghi file
-                                self.pipeline_context["stub_files_created"].append(rel_path)
-                                # Ghi file stub thực sự
-                                print(f"\n==========================================")
-                                print(f"📄 PREVIEW STUB FILE: '{filepath}' (Planner)")
-                                print(f"==========================================")
-                                print(content[:500] + ("\n...[còn tiếp]..." if len(content) > 500 else ""))
-                                print(f"==========================================\n")
-                                
-                                if self.ask_approval(f"Đồng ý cho Planner tạo stub file: '{filepath}'?"):
-                                    res = write_source_file(filepath, content)
-                                    status = "SUCCESS" if res == "Ghi file thành công." else "ERROR"
-                                    if status == "SUCCESS":
-                                        self.modified_files.add(os.path.abspath(filepath))
-                                    observation = format_observation(
-                                        status=status,
-                                        summary=res,
-                                        details=f"Đã tạo stub file: {filepath}",
-                                        artifacts=[filepath],
-                                        next_actions=["Tiếp tục tạo stub file tiếp theo hoặc gọi finish_task khi xong."]
-                                    )
-                                else:
-                                    observation = format_observation(
-                                        status="ERROR",
-                                        summary="Từ chối ghi stub file.",
-                                        details="Người dùng từ chối ghi tệp tin stub lên đĩa cứng.",
-                                        next_actions=["Kiểm tra lại filepath hoặc nội dung."],
-                                        artifacts=[filepath]
-                                    )
                         elif role == "TestWriter" and not ("test" in normalized_path or "tests" in normalized_path):
                             observation = format_observation(
                                 status="ERROR",
@@ -1009,12 +964,44 @@ class AIDeveloperHarness:
                                 status = "SUCCESS" if res == "Ghi file thành công." else "ERROR"
                                 if status == "SUCCESS":
                                     self.modified_files.add(os.path.abspath(filepath))
+                                    if role == "Developer":
+                                        self.write_count_without_build += 1
+                                    # Auto-reload AGENTS.md nếu agent vừa ghi vào nó
+                                    abs_written = os.path.abspath(filepath)
+                                    if abs_written == os.path.abspath(self.agents_md_path):
+                                        try:
+                                            with open(self.agents_md_path, "r", encoding="utf-8") as af:
+                                                self.agents_rules = af.read().strip()
+                                            print(f"🔄 [Harness]: AGENTS.md đã được cập nhật. Rules reloaded ({len(self.agents_rules)} chars).")
+                                        except Exception as e:
+                                            print(f"⚠️ [Harness]: Lỗi reload AGENTS.md: {e}")
+                                details = res
+                                # Post-write build hook: auto-build .cs files cho Developer
+                                if status == "SUCCESS" and role == "Developer" and filepath.endswith(".cs"):
+                                    print(f"🔨 [Harness Post-Write Hook]: Auto-building sau khi ghi '{os.path.basename(filepath)}'...")
+                                    b_code, b_out = run_dotnet_command("dotnet build FloraCore.csproj")
+                                    self.write_count_without_build = 0
+                                    lint_violations = check_csharp_linting()
+                                    if b_code != 0:
+                                        comp_errs = extract_compiler_errors(b_out)
+                                        if comp_errs:
+                                            err_text = "\n".join(comp_errs)
+                                            status = "ERROR"
+                                            res = f"BUILD FAILED ({len(comp_errs)} lỗi)"
+                                            details = f"✅ File đã ghi thành công.\n\n🚨 BUILD FAILED ngay sau khi ghi file. Các lỗi compiler:\n{err_text}\n\nSửa lỗi bằng write_source, sau đó build lại."
+                                        if lint_violations:
+                                            details += f"\n\n🧹 LINT VIOLATIONS:\n{lint_violations}"
+                                    else:
+                                        details = f"✅ File đã ghi thành công. Auto-build PASS."
+                                        if lint_violations:
+                                            details += f"\n\n🧹 LINT VIOLATIONS:\n{lint_violations}"
+                                next_acts = ["Tiếp tục: viết thêm file production code khác. Không cần build riêng - auto-build đã chạy."]
                                 observation = format_observation(
                                     status=status,
                                     summary=res,
-                                    details=res,
+                                    details=details,
                                     artifacts=[filepath],
-                                    next_actions=["Tiếp tục: viết thêm file production code khác, hoặc gọi execute_command('dotnet build FloraCore.csproj') để kiểm tra build."]
+                                    next_actions=next_acts
                                 )
                             else:
                                 observation = format_observation(
@@ -1127,6 +1114,16 @@ class AIDeveloperHarness:
                 except Exception as e:
                     print(f"⚠️ [Harness Control]: Lỗi đọc file {p_file}: {e}")
 
+        # 1b. Đọc AGENTS.md (flat markdown rulebook, inject mỗi lượt)
+        self.agents_rules = ""
+        if os.path.exists(self.agents_md_path):
+            try:
+                with open(self.agents_md_path, "r", encoding="utf-8") as f:
+                    self.agents_rules = f.read().strip()
+                print(f"📖 [Harness Control]: Đang nạp AGENTS.md rulebook...")
+            except Exception as e:
+                print(f"⚠️ [Harness Control]: Lỗi đọc AGENTS.md: {e}")
+
         # 2. Xây dựng System Instructions tối ưu hóa token (arXiv:2605.26731)
         # Loại bỏ các mô tả triết lý rườm rà, tập trung 100% vào action guidelines và rules thực thi.
         tool_usage_note = (
@@ -1157,6 +1154,8 @@ class AIDeveloperHarness:
             "  5. Gọi `finish_task` sau khi hoàn thành 4 bước trên.\n"
         )
         planner_system += architecture_guidelines
+        if self.agents_rules:
+            planner_system += f"\n--- AGENTS.MD RULES (BẮT BUỘC TUÂN THỦ, ƯU TIÊN CAO NHẤT) ---\n{self.agents_rules}\n"
         planner_system += tool_usage_note
 
         testwriter_system = (
@@ -1168,6 +1167,8 @@ class AIDeveloperHarness:
             "Gọi `finish_task` báo cáo danh sách file test đã viết khi hoàn thành."
         )
         testwriter_system += architecture_guidelines
+        if self.agents_rules:
+            testwriter_system += f"\n--- AGENTS.MD RULES (BẮT BUỘC TUÂN THỦ, ƯU TIÊN CAO NHẤT) ---\n{self.agents_rules}\n"
         testwriter_system += tool_usage_note
 
         developer_system = (
@@ -1177,10 +1178,10 @@ class AIDeveloperHarness:
             "\n🚨 NGUYÊN TẮC CHẨN ĐOÁN LỖI (RCA) - THOUGHT PHẢI CÓ:\n"
             "  1. SYMPTOMS (Lỗi nhận được là gì?) | 2. TRACE (Dòng nào, stack trace?) | 3. ROOT CAUSE (Tại sao lỗi?) | 4. RESOLUTION (Hướng fix triệt để)\n"
             "\n🚨 QUY TRÌNH PHÁT TRIỂN:\n"
-            "  - BƯỚC 1: Viết toàn bộ code production theo kế hoạch qua write_source (Không chạy execute_command).\n"
-            "  - BƯỚC 2: Build project bằng `execute_command('dotnet build FloraCore.csproj')`. Đọc compiler errors (CSxxxx) để sửa.\n"
-            "  - BƯỚC 3: Chạy test bằng `execute_command('dotnet test --filter FullyQualifiedName~<KEYWORD>')`. Sửa lỗi test (chú ý: HTTP 404, DB FOREIGN_KEY).\n"
-            "  - BƯỚC 4: Chỉ khi Build và Test PASS 100% không vi phạm coding policy mới gọi `finish_task`.\n"
+            "  - BƯỚC 0: ĐỌC test expectation TRƯỚC: dùng `view_source` xem file test trong FloraCore.Tests/ để biết method signature, expected behavior.\n"
+            "  - BƯỚC 1: Viết 1 file production → BUILD NGAY (`execute_command('dotnet build FloraCore.csproj')`). KHÔNG viết nhiều file cùng lúc. Mỗi lần viết 1 file, build ngay, sửa lỗi, rồi mới viết file tiếp theo.\n"
+            "  - BƯỚC 2: Chạy test bằng `execute_command('dotnet test --filter FullyQualifiedName~<KEYWORD>')`. Sửa tất cả lỗi test TRONG MỘT LẦN.\n"
+            "  - BƯỚC 3: Chỉ khi Build và Test PASS 100% không vi phạm coding policy mới gọi `finish_task`.\n"
             "\n🚨 THAM KHẢO FILE MẪU CHUẨN C# 12+ THEO TỪNG TẦNG (ĐỌC TRƯỚC KHI CODE):\n"
             "  * [DOMAIN EVENTS] [OrderCreatedEvent.cs](file:///{root_dir.replace(chr(92), '/')}/Application/Features/Orders/Events/OrderCreatedEvent.cs)\n"
             "  * [APPLICATION HANDLER] [CreateWebsiteInfoCommandHandler.cs](file:///{root_dir.replace(chr(92), '/')}/Application/Features/WebsiteInfo/Commands/CreateWebsiteInfoCommandHandler.cs)\n"
@@ -1190,6 +1191,8 @@ class AIDeveloperHarness:
             "  * [WEB CONTROLLERS] [OrdersController.cs](file:///{root_dir.replace(chr(92), '/')}/Controllers/OrdersController.cs)\n"
         )
         developer_system += architecture_guidelines
+        if self.agents_rules:
+            developer_system += f"\n--- AGENTS.MD RULES (BẮT BUỘC TUÂN THỦ, ƯU TIÊN CAO NHẤT) ---\n{self.agents_rules}\n"
         developer_system += tool_usage_note
 
         # --- CALLBACK PHA 1: PLANNING ---
@@ -1352,15 +1355,6 @@ class AIDeveloperHarness:
             print(dev_report)
             print("=============================================================\n")
             
-            if self.mock_mode:
-                score, report = self.run_gan_evaluation(task_description)
-                print(f"\n🏆 THANG ĐIỂM ĐẠT ĐƯỢC: {score:.2f}/10.0 (Yêu cầu tối thiểu: {self.pass_threshold})")
-                print(report)
-                if score >= self.pass_threshold:
-                    return True, ""
-                else:
-                    return False, f"Evaluator từ chối với điểm {score:.2f} < {self.pass_threshold}.\nBáo cáo:\n{report}"
-                    
             # Luôn biên dịch và chạy kiểm thử thực tế trên đĩa cứng để xác thực, không tin vào văn bản báo cáo
             print("⚙️ Chạy build hệ thống (production code)...")
             code, out = run_dotnet_command("dotnet build FloraCore.csproj")

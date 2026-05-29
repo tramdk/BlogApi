@@ -46,9 +46,13 @@ def generate_directory_tree(root_dir: str) -> str:
     walk(root_dir)
     return "\n".join(lines)
 
-def build_cache_contents(root_dir: str, policy_content: str, lessons_content: str, skills_contents: list = None) -> list[str]:
+def build_cache_contents(root_dir: str, policy_content: str, lessons_content: str, skills_contents: list = None, agents_rules: str = "") -> list[str]:
     """Tạo nội dung tĩnh lớn (mã nguồn, cây thư mục, coding policy) để kích hoạt Gemini Context Cache (>32k tokens)."""
     contents = []
+    
+    # 0. AGENTS.md rules (injected first vì là rules ưu tiên cao nhất)
+    if agents_rules:
+        contents.append(f"--- AGENTS.MD RULES (BẮT BUỘC TUÂN THỦ, ƯU TIÊN CAO NHẤT) ---\n{agents_rules}")
     
     # 1. Coding Policy
     if policy_content:

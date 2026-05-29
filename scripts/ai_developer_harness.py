@@ -1,6 +1,13 @@
 import os
 import sys
 
+# Load .env trước khi import harness (để os.getenv đọc được GEMINI_API_KEY v.v.)
+from dotenv import load_dotenv
+# Ưu tiên .env ở project root, fallback về current dir
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(root_dir, ".env"))
+load_dotenv()  # fallback: current working directory
+
 # Đảm bảo Python có thể import từ thư mục scripts hiện tại
 script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:

@@ -123,10 +123,12 @@ class LLMRouter:
                 if parts:
                     contents.append(types.Content(role="model", parts=parts))
             elif role == "tool":
+                # OpenAI format uses 'name' for the function name in role='tool' message, or tool_call_id
+                function_name = msg.get("name") or "unknown"
                 contents.append(types.Content(
                     role="user",
                     parts=[types.Part.from_function_response(
-                        name=msg.get("name", "unknown"),
+                        name=function_name,
                         response={"result": msg["content"]}
                     )]
                 ))
@@ -303,6 +305,8 @@ class LLMRouter:
                     
                     if is_rate_limit:
                         print(f"👉 Chi tiết: API bị giới hạn tốc độ sau {max_retries} lần thử lại với Progressive Backoff.")
+                    elif "429" in err_msg or "resource_exhausted" in err_msg.lower() or "credits are depleted" in err_msg.lower():
+                        print(f"👉 Chi tiết: Hết hạn mức API. Vui lòng nạp thêm credits tại https://aistudio.google.com.")
                     elif "402" in err_msg or "insufficient_balance" in err_msg.lower():
                         print(f"👉 Chi tiết: Tài khoản API không đủ số dư (Insufficient Balance).")
                     elif "403" in err_msg or "401" in err_msg or "invalid" in err_msg.lower() or "unauthorized" in err_msg.lower():
@@ -618,85 +622,25 @@ class LLMRouter:
                     if not is_rate_limit:
                         backoff *= 2
                 else:
-                    print(f"\n=============================================================")
-                    print(f"⚠️ [CẢNH BÁO LỖI KẾT NỐI API {self.provider.upper()}]")
-                    print(f"=============================================================")
-                    
-                    if is_rate_limit:
-                        print(f"👉 Chi tiết: API bị giới hành tốc độ sau {max_retries} lần thử lại với Progressive Backoff.")
-                    elif "402" in err_msg or "insufficient_balance" in err_msg.lower():
-                        print(f"👉 Chi tiết: Tài khoản API không đủ số dư (Insufficient Balance).")
-                    elif "403" in err_msg or "401" in err_msg or "invalid" in err_msg.lower() or "unauthorized" in err_msg.lower():
-                        print(f"👉 Chi tiết: Khóa API '{self.provider.upper()}_API_KEY' không hợp lệ.")
-                    else:
-                        print(f"👉 Chi tiết lỗi: {err_msg}")
-                        
                     print(f"\n🤖 [Hệ thống]: Tự động chuyển đổi sang chế độ giả lập (Mock Mode) để tiếp tục quy trình...")
                     print(f"=============================================================\n")
                     self.mock_mode = True
                     return self.get_mock_agent_response(self.current_role)
-
-    # =========================================================================
-    # MOCK RESPONSES
-    # =========================================================================
-
     def _get_mock_tool_response(self, role: str) -> dict:
-        """Trả về phản hồi giả lập dạng tool call cho Native Function Calling."""
-        if role == "Planner":
-            return {
-                "thought": "Tôi đã phân tích kiến trúc dự án và lập xong kế hoạch chi tiết.",
-                "tool_calls": [{
-                    "id": "mock_call_planner",
-                    "function": {
-                        "name": "finish_task",
-                        "arguments": {
-                            "summary": (
-                                "### AI EXECUTION PLAN: TÍCH HỢP THỰC THỂ POSTCATEGORY\n\n"
-                                "1. **Phân tích Kiến trúc**:\n"
-                                "   - Lớp Domain: Tạo thực thể `PostCategory.cs` kế thừa từ `BaseEntity`.\n"
-                                "   - Lớp Application: Tạo Command/Query để thêm mới và truy vấn danh mục bài viết thông qua MediatR.\n"
-                                "2. **Kịch bản kiểm thử (Test Cases)**:\n"
-                                "   - Viết Integration Test kiểm chứng việc tạo mới PostCategory thành công với dữ liệu hợp lệ."
-                            )
-                        }
-                    }
-                }],
-                "raw_text": ""
-            }
-        elif role == "TestWriter":
-            return {
-                "thought": "Tôi đã viết xong các file test cần thiết.",
-                "tool_calls": [{
-                    "id": "mock_call_testwriter",
-                    "function": {
-                        "name": "finish_task",
-                        "arguments": {"summary": "Đã viết thành công integration tests cho PostCategory."}
-                    }
-                }],
-                "raw_text": ""
-            }
-        elif role == "Developer":
-            return {
-                "thought": "Các bài test đã pass thành công! Tôi sẽ gọi finish_task.",
-                "tool_calls": [{
-                    "id": "mock_call_developer",
-                    "function": {
-                        "name": "finish_task",
-                        "arguments": {"summary": "Đã hiện thực hóa PostCategory.cs và vượt qua tất cả các bài kiểm thử."}
-                    }
-                }],
-                "raw_text": ""
-            }
+        """
+        Trả về phản hồi mock để duy trì luồng pipeline (không crash).
+        Agent sẽ tự động gọi finish_task để pipeline chạy qua các phase.
+        """
+        print(f"\n⚡ [Harness Mock]: Lớp '{role}' chạy ở chế độ giả lập.")
         return {
-            "thought": "Kết thúc.",
+            "thought": f"Mock {role}: hoàn thành nhiệm vụ.",
             "tool_calls": [{
-                "id": "mock_call_default",
+                "id": f"mock_{int(time.time())}",
                 "function": {
                     "name": "finish_task",
-                    "arguments": {"summary": "Done"}
+                    "arguments": {"summary": f"Mock {role} completed task."}
                 }
-            }],
-            "raw_text": ""
+            }]
         }
 
     def get_mock_agent_response(self, role: str) -> str:
