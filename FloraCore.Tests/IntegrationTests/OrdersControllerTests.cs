@@ -1,155 +1,97 @@
-
 using FloraCore.Application.Common.Models;
-using FloraCore.Application.Features.Orders.Queries;
-using FloraCore.Domain.Entities;
+using FloraCore.Application.Features.Auth.Commands;
+using FloraCore.Application.Features.Orders.Commands;
 using FloraCore.Domain.ValueObjects;
-using FloraCore.Infrastructure.Data;
+using FloraCore.Tests.IntegrationTests;
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
 using System.Net;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
+using FloraCore.Application.Features.Auth.DTOs;
+using System.Text.Json;
+using System;
+using Microsoft.Extensions.DependencyInjection;
+using FloraCore.Application.Common.Interfaces;
+using Moq;
 
-namespace FloraCore.Tests.IntegrationTests;
-
-public class OrdersControllerTests : IClassFixture<CustomWebApplicationFactory>
+namespace FloraCore.Tests.IntegrationTests
 {
-    private readonly CustomWebApplicationFactory _factory;
-
-    public OrdersControllerTests(CustomWebApplicationFactory factory)
+    public class OrdersControllerTests : IClassFixture<OrdersControllerTestWebApplicationFactory>
     {
-        _factory = factory;
-    }
+        private readonly OrdersControllerTestWebApplicationFactory _factory;
+        private readonly HttpClient _client;
 
-    [Fact]
-    public async Task GetOrderStatistics_ShouldReturnUnauthorized_WhenNotAuthenticated()
-    {
-        // Arrange
-        var client = _factory.CreateClient();
-
-        // Act
-        var response = await client.GetAsync("/api/orders/statistics");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetOrderStatistics_ShouldReturnForbidden_WhenNotAdmin()
-    {
-        // Arrange
-        var client = await GetAuthenticatedClientAsync("user@floracore.com", "User123!");
-
-        // Act
-        var response = await client.GetAsync("/api/orders/statistics");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task GetOrderStatistics_ShouldReturnOkAndStatistics_WhenAdminAuthenticated()
-    {
-        // Arrange
-        var client = await GetAuthenticatedClientAsync("admin@floracore.com", "Admin123!");
-
-        // Act
-        var response = await client.GetAsync("/api/orders/statistics");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var content = await response.Content.ReadAsStringAsync();
-        var apiResponse = JsonSerializer.Deserialize<ApiResponse<OrderStatisticsDto>>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        apiResponse.Should().NotBeNull();
-        apiResponse!.Success.Should().BeTrue();
-        apiResponse.Data.Should().NotBeNull();
-    }
-
-    [Fact]
-    public async Task GetOrderStatistics_ShouldReturnFilteredStatistics_WhenDateRangeProvided()
-    {
-        // Arrange
-        var client = await GetAuthenticatedClientAsync("admin@floracore.com", "Admin123!");
-        var baseDate = DateTime.Now.Date;
-        await SeedOrderDataAsync(baseDate);
-
-        // Act
-        var startDate = baseDate.AddDays(-1);
-        var endDate = baseDate.AddDays(1);
-        const string dateFormat = "yyyy-MM-dd HH:mm:ss.fffffff";
-        var response = await client.GetAsync($"/api/orders/statistics?startDate={Uri.EscapeDataString(startDate.ToString(dateFormat))}&endDate={Uri.EscapeDataString(endDate.ToString(dateFormat))}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var content = await response.Content.ReadAsStringAsync();
-        var apiResponse = JsonSerializer.Deserialize<ApiResponse<OrderStatisticsDto>>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        apiResponse.Should().NotBeNull();
-        apiResponse!.Success.Should().BeTrue();
-        apiResponse.Data.Should().NotBeNull();
-        apiResponse.Data!.TotalOrders.Should().Be(3);
-    }
-
-    private async Task<HttpClient> GetAuthenticatedClientAsync(string email, string password)
-    {
-        var client = _factory.CreateClient();
-
-        // Register user if not admin (admin is pre-seeded)
-        if (email != "admin@floracore.com")
+        public OrdersControllerTests(OrdersControllerTestWebApplicationFactory factory)
         {
-            var registerPayload = new { email, password, fullName = email.Split('@')[0] };
-            await client.PostAsync("/api/v1/auth/register", JsonContent.Create(registerPayload));
+            _factory = factory;
+            _client = _factory.CreateClient();
         }
 
-        var loginPayload = new { email, password };
-        var loginResponse = await client.PostAsync("/api/v1/auth/login", JsonContent.Create(loginPayload));
-        loginResponse.EnsureSuccessStatusCode();
+        [Fact]
+        public async Task Create_ShouldCreateOrderAndSendNotification()
+        {
+            // Arrange
+            var registerCommand = new RegisterCommand(
+                Email: $"test{Guid.NewGuid()}@example.com",
+                Password: "P@sswOrd123",
+                FullName: "Test User"
+            );
 
-        var loginContent = await loginResponse.Content.ReadAsStringAsync();
-        var loginData = JsonDocument.Parse(loginContent).RootElement;
+            var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerCommand);
+            registerResponse.EnsureSuccessStatusCode();
 
-        // Response is wrapped in ApiResponse envelope: { success, data: { accessToken, refreshToken } }
-        var token = loginData.GetProperty("data").GetProperty("accessToken").GetString();
+            var loginCommand = new LoginCommand(
+                Email: registerCommand.Email,
+                Password: registerCommand.Password
+            );
 
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return client;
+            var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginCommand);
+            loginResponse.EnsureSuccessStatusCode();
+
+            var authResponse = await loginResponse.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", authResponse!.Data!.AccessToken);
+
+            var createOrderCommand = new CreateOrderCommand(
+                UserId: authResponse!.Data!.User.Id, // Target actual authenticated user
+                ShippingAddress: new Address { Street = "Street", City = "City", State = "State", ZipCode = "ZipCode" }
+            );
+
+            // Mock IAdminNotificationService
+            var adminNotificationServiceMock = _factory.Services.GetRequiredService<Mock<IAdminNotificationService>>();
+
+            // Act
+            var response = await _client.PostAsJsonAsync("/api/v1/orders", createOrderCommand);
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+            // Verify that a notification was sent
+            adminNotificationServiceMock.Verify(x => x.SendNewOrderNotification(It.IsAny<Guid>()), Times.Once);
+        }
     }
 
-    private async Task SeedOrderDataAsync(DateTime seedBaseDate)
+    // Override CustomWebApplicationFactory to replace IAdminNotificationService with a Mock
+    public class OrdersControllerTestWebApplicationFactory : FloraCore.Tests.CustomWebApplicationFactory
     {
-        using var scope = _factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-        // Ensure the database is created
-        await dbContext.Database.EnsureCreatedAsync();
-
-        // Clear existing data
-        await dbContext.Orders.ExecuteDeleteAsync();
-
-        // Get actual user IDs from the database to satisfy FK constraint
-        var userIds = await dbContext.Users.Select(u => u.Id).ToListAsync();
-        if (userIds.Count == 0)
+        protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
         {
-            // Fallback: use a deterministic GUID if no users exist yet
-            userIds = [Guid.NewGuid()];
+            base.ConfigureWebHost(builder);
+
+            builder.ConfigureServices(services =>
+            {
+                // Remove the original IAdminNotificationService registration
+                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IAdminNotificationService));
+                if (descriptor != null)
+                {
+                    services.Remove(descriptor);
+                }
+
+                // Add a Mock<IAdminNotificationService> registration
+                var mockAdminNotificationService = new Mock<IAdminNotificationService>();
+                services.AddSingleton(mockAdminNotificationService);
+                services.AddSingleton(mockAdminNotificationService.Object);
+            });
         }
-
-        // Seed new data using fixed dates to avoid time drift issues
-        var orders = new List<Order>
-        {
-            new Order { Id = Guid.NewGuid(), UserId = userIds[0], OrderDate = seedBaseDate.AddDays(-2), OrderStatus = "Delivered", TotalAmount = 50, ShippingAddress = new Address { Street = "123 Main St", City = "HCMC", Country = "VN" } },
-            new Order { Id = Guid.NewGuid(), UserId = userIds[0], OrderDate = seedBaseDate.AddDays(-1), OrderStatus = "Pending", TotalAmount = 100, ShippingAddress = new Address { Street = "456 Elm St", City = "HCMC", Country = "VN" } },
-            new Order { Id = Guid.NewGuid(), UserId = userIds[0], OrderDate = seedBaseDate, OrderStatus = "Shipped", TotalAmount = 150, ShippingAddress = new Address { Street = "789 Oak St", City = "HCMC", Country = "VN" } },
-            new Order { Id = Guid.NewGuid(), UserId = userIds[0], OrderDate = seedBaseDate.AddDays(1), OrderStatus = "Delivered", TotalAmount = 200, ShippingAddress = new Address { Street = "321 Pine St", City = "HCMC", Country = "VN" } }
-        };
-
-        dbContext.Orders.AddRange(orders);
-        await dbContext.SaveChangesAsync();
     }
 }

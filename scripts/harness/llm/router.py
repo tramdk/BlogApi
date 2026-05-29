@@ -318,37 +318,12 @@ class LLMRouter:
         """Gọi Gemini API với Native Function Calling."""
         from google.genai import types
         
-        active_model = "gemini-2.5-flash"
-        if self.current_role == "Developer":
-            self.model_name = self.model_name or "gemini-2.5-flash"
-            active_model = self.model_name
+        active_model = self.model_name or "gemini-2.5-flash"
         
         model_id = active_model
         if not model_id.startswith("models/"):
             model_id = f"models/{model_id}"
             
-        # Thử nạp hoặc tạo Context Cache dùng chung
-        cache_key = f"shared_cache_{active_model}"
-        cache_name = self.gemini_caches.get(cache_key)
-        
-        if not cache_name and build_cache_func:
-            try:
-                print(f"⚡ [Harness Gemini Cache]: Đang tạo Context Cache dùng chung cho model {active_model}...")
-                cache_contents = build_cache_func()
-                cache = self.client.caches.create(
-                    model=model_id,
-                    config=types.CreateCachedContentConfig(
-                        contents=cache_contents,
-                        ttl="3600s"
-                    )
-                )
-                cache_name = cache.name
-                self.gemini_caches[cache_key] = cache_name
-                print(f"✅ [Harness Gemini Cache]: Đã kích hoạt Cache dùng chung thành công ({cache_name})")
-            except Exception as e:
-                print(f"⚠️ [Harness Gemini Cache Warning]: Không tạo được Cache ({e}). Sẽ fallback về chế độ bình thường.")
-                cache_name = None
-
         # Chuyển đổi tools và messages
         gemini_tools = self._convert_tools_for_gemini(tools_schema)
         gemini_contents = self._convert_messages_for_gemini(messages)
@@ -358,9 +333,6 @@ class LLMRouter:
             "tools": gemini_tools,
             "system_instruction": system_instruction
         }
-        
-        if cache_name:
-            config_kwargs["cached_content"] = cache_name
         
         response = self.client.models.generate_content(
             model=model_id,
@@ -497,10 +469,7 @@ class LLMRouter:
                 if self.provider == "gemini":
                     from google.genai import types
                     
-                    active_model = "gemini-2.5-flash"
-                    if self.current_role == "Developer":
-                        self.model_name = self.model_name or "gemini-2.5-flash"
-                        active_model = self.model_name
+                    active_model = self.model_name or "gemini-2.5-flash"
                     
                     cache_key = f"shared_cache_{active_model}"
                     cache_name = self.gemini_caches.get(cache_key)

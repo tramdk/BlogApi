@@ -93,6 +93,31 @@ namespace FloraCore.Tests.Web.Controllers
         }
 
         [Fact]
+        public async Task Create_ReturnsBadRequest_WhenCommandIsInvalid()
+        {
+            // Arrange
+            var mediatorMock = new Mock<IMediator>();
+            var controller = new WebsiteInfoController(mediatorMock.Object);
+            var command = new CreateWebsiteInfoCommand(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            );
+            mediatorMock.Setup(m => m.Send(It.IsAny<CreateWebsiteInfoCommand>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new FluentValidation.ValidationException("Validation failed"));
+
+            // Act
+            var result = await controller.Create(command);
+
+            // Assert
+            result.Should().BeOfType<BadRequestResult>();
+        }
+
+        [Fact]
         public async Task Update_ReturnsNoContentResult_WhenUpdateIsSuccessful()
         {
             // Arrange
@@ -117,6 +142,33 @@ namespace FloraCore.Tests.Web.Controllers
 
             // Assert
             result.Should().BeOfType<NoContentResult>();
+        }
+
+        [Fact]
+        public async Task Update_ReturnsBadRequest_WhenCommandIsInvalid()
+        {
+            // Arrange
+            var mediatorMock = new Mock<IMediator>();
+            var controller = new WebsiteInfoController(mediatorMock.Object);
+            var websiteInfoId = Guid.NewGuid();
+            var command = new UpdateWebsiteInfoCommand(
+                websiteInfoId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            );
+            mediatorMock.Setup(m => m.Send(It.IsAny<UpdateWebsiteInfoCommand>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new FluentValidation.ValidationException("Validation failed"));
+
+            // Act
+            var result = await controller.Update(websiteInfoId, command);
+
+            // Assert
+            result.Should().BeOfType<BadRequestResult>();
         }
 
         [Fact]

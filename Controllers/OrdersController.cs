@@ -7,11 +7,13 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using FloraCore.Application.Common.Constants; // ThÃªm dÃ²ng nÃ y
+using Asp.Versioning;
 
 namespace FloraCore.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 [Authorize]
 public class OrdersController(IMediator mediator) : ControllerBase
 {

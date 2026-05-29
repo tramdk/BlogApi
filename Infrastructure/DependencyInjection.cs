@@ -101,6 +101,7 @@ public static class DependencyInjection
 #pragma warning restore EXTEXP0018
 
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IAdminNotificationService, AdminNotificationService>();
         services.AddScoped<OutboxProcessor>();
         services.AddScoped<IInboxService, InboxService>();
 

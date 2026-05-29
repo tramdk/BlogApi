@@ -173,7 +173,7 @@ async def stream_output(
         text="✅ **Pipeline hoàn tất!**",
     )
 
-def _start_pipeline_thread(chat_id, msg_queue, context, task, auto_approve=True, force_mock=None):
+def _start_pipeline_thread(chat_id, msg_queue, context, task, auto_approve=True, force_mock=None, skip_enricher=False):
     """Tạo TelegramHarness + thread chạy pipeline, trả về thread object."""
     def _run():
         old_stdout = sys.stdout
@@ -186,7 +186,7 @@ def _start_pipeline_thread(chat_id, msg_queue, context, task, auto_approve=True,
         )
         _harness_store[chat_id] = harness
         try:
-            harness.execute_pipeline(task)
+            harness.execute_pipeline(task, skip_enricher=skip_enricher)
         except Exception as exc:
             msg_queue.put(("log", f"\n❌ **LỖI:** `{exc}`\n```\n{traceback.format_exc()}\n```"))
         finally:

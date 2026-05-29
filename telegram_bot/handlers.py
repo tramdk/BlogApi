@@ -21,14 +21,16 @@ async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = list(context.args)
     mock_mode = "--mock" in args
     auto_approve = "--auto-approve" in args
-    args = [a for a in args if a not in ("--mock", "--auto-approve")]
+    skip_enricher = "--skip-enricher" in args
+    args = [a for a in args if a not in ("--mock", "--auto-approve", "--skip-enricher")]
     task = " ".join(args)
     if not task:
         await update.message.reply_text(
-            "Cách dùng: `/run [--mock] [--auto-approve] <nhiệm vụ>`\n"
-            "  `--mock`          chạy giả lập (không cần API key)\n"
-            "  `--auto-approve`  tự động phê duyệt (bỏ qua HITL)\n"
-            "Ví dụ: /run --mock Thêm entity PostCategory"
+            "Cách dùng: `/run [--mock] [--auto-approve] [--skip-enricher] <nhiệm vụ>`\n"
+            "  `--mock`            chạy giả lập (không cần API key)\n"
+            "  `--auto-approve`    tự động phê duyệt (bỏ qua HITL)\n"
+            "  `--skip-enricher`   bỏ qua làm giàu prompt ở Pha 0\n"
+            "Ví dụ: /run --mock --skip-enricher Thêm entity PostCategory"
         )
         return
 
@@ -42,10 +44,20 @@ async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
         flag_labels.append("mock")
     if auto_approve:
         flag_labels.append("auto-approve")
+    if skip_enricher:
+        flag_labels.append("skip-enricher")
     tag = f" [{', '.join(flag_labels)}]" if flag_labels else ""
     await update.message.reply_text(f"🚀 **Đang chạy{tag}:** `{task}`")
 
-    thread = _start_pipeline_thread(chat_id, msg_queue, context, task, auto_approve, mock_mode)
+    thread = _start_pipeline_thread(
+        chat_id=chat_id,
+        msg_queue=msg_queue,
+        context=context,
+        task=task,
+        auto_approve=auto_approve,
+        force_mock=mock_mode,
+        skip_enricher=skip_enricher
+    )
     asyncio.create_task(
         stream_output(chat_id, msg_queue, context.application, context.chat_data, thread)
     )

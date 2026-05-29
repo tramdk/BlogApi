@@ -21,6 +21,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Nạp cấu hình từ file .env
+env_path = PROJECT_ROOT / ".env"
+if env_path.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_path)
+    except ImportError:
+        pass
+
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 
@@ -31,15 +40,6 @@ from telegram_bot.callback import callback_handler
 
 def main():
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    if not token:
-        env_path = PROJECT_ROOT / ".env"
-        if env_path.exists():
-            try:
-                from dotenv import load_dotenv
-                load_dotenv(env_path)
-                token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-            except ImportError:
-                pass
     if not token:
         print("❌ Chưa đặt TELEGRAM_BOT_TOKEN trong .env hoặc biến môi trường.")
         print("   Tạo bot qua @BotFather và thêm dòng:")

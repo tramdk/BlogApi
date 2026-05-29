@@ -35,16 +35,30 @@ public class WebsiteInfoController(IMediator mediator) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(CreateWebsiteInfoCommand command)
     {
-        var id = await _mediator.Send(command);
-        return CreatedAtAction(nameof(Get), new { id }, id);
+        try
+        {
+            var id = await _mediator.Send(command);
+            return CreatedAtAction(nameof(Get), new { id }, id);
+        }
+        catch (FluentValidation.ValidationException)
+        {
+            return BadRequest();
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(Guid id, UpdateWebsiteInfoCommand command)
     {
         if (id != command.Id) return BadRequest();
-        await _mediator.Send(command);
-        return NoContent();
+        try
+        {
+            await _mediator.Send(command);
+            return NoContent();
+        }
+        catch (FluentValidation.ValidationException)
+        {
+            return BadRequest();
+        }
     }
 
     [HttpDelete("{id}")]

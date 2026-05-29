@@ -32,6 +32,11 @@ if __name__ == "__main__":
     if "--mock" in args:
         mock_mode_flag = True
         args.remove("--mock")
+
+    skip_enricher_flag = False
+    if "--skip-enricher" in args:
+        skip_enricher_flag = True
+        args.remove("--skip-enricher")
         
     # Xử lý tham số kích hoạt Skill
     skill_name = None
@@ -89,4 +94,4 @@ if __name__ == "__main__":
     if mock_mode_flag:
         harness.mock_mode = True
         harness.llm_router.mock_mode = True
-    harness.execute_pipeline(task)
+    harness.execute_pipeline(task, skip_enricher=skip_enricher_flag)

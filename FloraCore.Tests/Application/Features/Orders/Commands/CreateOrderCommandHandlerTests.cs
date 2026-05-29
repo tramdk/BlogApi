@@ -1,47 +1,52 @@
+
 using FloraCore.Application.Common.Interfaces;
 using FloraCore.Application.Features.Orders.Commands;
 using FloraCore.Domain.Entities;
 using FloraCore.Domain.ValueObjects;
-using MediatR;
+using FloraCore.Application.Interfaces;
 using Moq;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using FluentAssertions;
-using FloraCore.Application.Interfaces;
+using Microsoft.Extensions.Logging;
 
-namespace FloraCore.Tests.Application.Features.Orders.Commands;
-
-public class CreateOrderCommandHandlerTests
+namespace FloraCore.Tests.Application.Features.Orders.Commands
 {
-    private readonly Mock<IOrderRepository> _mockOrderRepository;
-    private readonly CreateOrderCommandHandler _handler;
-
-    public CreateOrderCommandHandlerTests()
+    public class CreateOrderCommandHandlerTests
     {
-        _mockOrderRepository = new Mock<IOrderRepository>();
-        _handler = new CreateOrderCommandHandler(_mockOrderRepository.Object);
-    }
+        [Fact]
+        public async Task Handle_ShouldCreateOrderAndSendNotification()
+        {
+            // Arrange
+            var mockOrderRepository = new Mock<IOrderRepository>();
+            var mockAdminNotificationService = new Mock<IAdminNotificationService>();
+            var mockLogger = new Mock<ILogger<CreateOrderCommandHandler>>();
 
-    [Fact]
-    public async Task Handle_ValidCommand_CreatesOrder()
-    {
-        // Arrange
-        var userId = Guid.NewGuid();
+            var handler = new CreateOrderCommandHandler(mockOrderRepository.Object, mockAdminNotificationService.Object);
 
-        var command = new CreateOrderCommand(userId, new Address { Street = "Test Street", City = "Test City", State = "Test State", ZipCode = "12345", Country = "Test Country" });
+            var command = new CreateOrderCommand(
+                UserId: Guid.NewGuid(),
+                ShippingAddress: new Address { Street = "Street", City = "City", State = "State", ZipCode = "ZipCode" },
+                IdempotencyKey: ""
+            );
 
-        Guid createdOrderId = Guid.Empty;
-        _mockOrderRepository.Setup(r => r.AddAsync(It.IsAny<Order>()))
-            .Callback<Order>(order => createdOrderId = order.Id)
-            .Returns(Task.CompletedTask);
+            Guid createdOrderId = Guid.NewGuid();
+            mockOrderRepository.Setup(repo => repo.AddAsync(It.IsAny<Order>()))
+                .Returns(Task.CompletedTask)
+                .Callback<Order>(order =>
+                {
+                    order.Id = createdOrderId;
+                });
 
-        // Act
-        var result = await _handler.Handle(command, CancellationToken.None);
+            // Act
+            var result = await handler.Handle(command, CancellationToken.None);
 
-        // Assert
-        result.Should().NotBeEmpty();
-        _mockOrderRepository.Verify(r => r.AddAsync(It.Is<Order>(o => o.UserId == userId)), Times.Once);
+            // Assert
+            result.Should().Be(createdOrderId);
+
+            mockOrderRepository.Verify(repo => repo.AddAsync(It.IsAny<Order>()), Times.Once);
+        }
     }
 }

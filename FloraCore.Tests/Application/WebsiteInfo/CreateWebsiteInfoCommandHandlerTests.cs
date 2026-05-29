@@ -65,5 +65,30 @@ namespace FloraCore.Tests.Application.WebsiteInfo
                 .WithMessage("Name cannot be null or empty. (Parameter 'Name')");
             mockRepository.Verify(repo => repo.AddAsync(It.IsAny<FloraCore.Domain.Entities.WebsiteInfo>()), Times.Never);
         }
+
+        [Fact]
+        public async Task Handle_InvalidEmail_ThrowsArgumentException()
+        {
+            // Arrange
+            var mockRepository = new Mock<IWebsiteInfoRepository>();
+            var handler = new CreateWebsiteInfoCommandHandler(mockRepository.Object);
+            var command = new CreateWebsiteInfoCommand(
+                "Test Name",
+                "Test Slogan",
+                "Test Introduction",
+                "invalid-email",
+                "1234567890",
+                "123456789",
+                "Test Location"
+            );
+
+            // Act
+            Func<Task> act = async () => await handler.Handle(command, CancellationToken.None);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentException>()
+                .WithMessage("Email is not valid. (Parameter 'Email')");
+            mockRepository.Verify(repo => repo.AddAsync(It.IsAny<FloraCore.Domain.Entities.WebsiteInfo>()), Times.Never);
+        }
     }
 }

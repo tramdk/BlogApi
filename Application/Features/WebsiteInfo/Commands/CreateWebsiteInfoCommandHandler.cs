@@ -18,6 +18,11 @@ public class CreateWebsiteInfoCommandHandler(IWebsiteInfoRepository repository) 
             throw new ArgumentException("Name cannot be null or empty.", nameof(request.Name));
         }
 
+        if (!string.IsNullOrEmpty(request.Email) && !request.Email.Contains("@"))
+        {
+            throw new ArgumentException("Email is not valid.", nameof(request.Email));
+        }
+
         var websiteInfo = new Domain.Entities.WebsiteInfo
         {
             Id = Guid.NewGuid(),

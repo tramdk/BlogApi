@@ -14,11 +14,14 @@ public record CreateOrderCommand(Guid UserId, Address ShippingAddress, string Id
 public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Guid>
 {
     private readonly IOrderRepository _repository;
+    private readonly IAdminNotificationService _adminNotificationService;
 
-    public CreateOrderCommandHandler(IOrderRepository repository)
+    public CreateOrderCommandHandler(IOrderRepository repository, IAdminNotificationService adminNotificationService)
     {
         ArgumentNullException.ThrowIfNull(repository);
+        ArgumentNullException.ThrowIfNull(adminNotificationService);
         _repository = repository;
+        _adminNotificationService = adminNotificationService;
     }
 
     public async Task<Guid> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
@@ -35,6 +38,7 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Gui
         };
 
         await _repository.AddAsync(order);
+        await _adminNotificationService.SendNewOrderNotification(order.Id);
         return order.Id;
     }
 }
