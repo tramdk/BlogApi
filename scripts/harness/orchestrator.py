@@ -89,11 +89,28 @@ class AIDeveloperHarness:
             f.write(f"PHIÊN LÀM VIỆC MỚI KHỞI CHẠY (MULTI-AGENT SPEC-DRIVEN FLOW)\n")
             f.write(f"=============================================================\n")
         
-        # Tự động nạp chính sách lập trình cục bộ (CODING_POLICY.md hoặc CLAUDE.md)
+        # Cấu hình mặc định (fallback)
+        self.policy_files = ["CODING_POLICY.md", "CLAUDE.md"]
+        self.skills_and_guides = []
+        self.allowed_cmds = ["dotnet build", "dotnet test", "dotnet restore", "dotnet clean"]
+
+        # Đọc cấu hình từ harness_config.json nếu có
+        config_path = os.path.join(root_dir, "harness_config.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r", encoding="utf-8") as cf:
+                    config_data = json.load(cf)
+                    self.policy_files = config_data.get("policy_files", self.policy_files)
+                    self.skills_and_guides = config_data.get("skills_and_guides", self.skills_and_guides)
+                    self.allowed_cmds = config_data.get("allowed_commands", self.allowed_cmds)
+                print(f"⚙️ [Harness Control]: Đã nạp cấu hình từ {config_path}")
+            except Exception as e:
+                print(f"⚠️ [Harness Control]: Lỗi khi đọc file cấu hình, sử dụng mặc định: {e}")
+
+        # Tự động nạp chính sách lập trình cục bộ
         self.policy_content = ""
         try:
-            policy_files = ["CODING_POLICY.md", "CLAUDE.md"]
-            for p_file in policy_files:
+            for p_file in self.policy_files:
                 p_path = os.path.join(root_dir, p_file)
                 if os.path.exists(p_path):
                     with open(p_path, "r", encoding="utf-8") as pf:
@@ -102,6 +119,18 @@ class AIDeveloperHarness:
                     break
         except Exception as e:
             print(f"⚠️ [Harness Control]: Lỗi khi quét/nạp chính sách lập trình cục bộ: {e}")
+
+        # Tự động nạp các tài liệu kỹ năng (skills/guides)
+        self.skills_contents = []
+        for s_file in self.skills_and_guides:
+            s_path = os.path.join(root_dir, s_file)
+            if os.path.exists(s_path):
+                try:
+                    with open(s_path, "r", encoding="utf-8") as sf:
+                        self.skills_contents.append((s_file, sf.read()))
+                    print(f"📖 [Harness Control]: Đang nạp tài liệu kỹ năng từ '{s_file}'...")
+                except Exception as e:
+                    print(f"⚠️ [Harness Control]: Lỗi khi nạp tài liệu kỹ năng {s_file}: {e}")
 
         # Tự động nạp bài học tự động (harness_lessons.md) nếu có
         self.lessons_path = os.path.join(scripts_dir, "harness_lessons.md")
@@ -138,7 +167,7 @@ class AIDeveloperHarness:
         harness_dir = os.path.dirname(os.path.abspath(__file__))
         scripts_dir = os.path.dirname(harness_dir)
         root_dir = os.path.dirname(scripts_dir)
-        return build_cache_contents(root_dir, self.policy_content, self.lessons_content)
+        return build_cache_contents(root_dir, self.policy_content, self.lessons_content, self.skills_contents)
 
     def extract_test_filter_keyword(self, plan: str, task_description: str) -> str:
         """Trích xuất keyword để filter test từ plan hoặc task description."""
@@ -634,7 +663,7 @@ class AIDeveloperHarness:
             else:
                 if action_name == "execute_command":
                     cmd = action_args.get("command", "")
-                    allowed_cmds = ["dotnet build", "dotnet test", "dotnet restore", "dotnet clean"]
+                    allowed_cmds = self.allowed_cmds
                     is_git = cmd.startswith("git ") and any(sub in cmd for sub in ["status", "add", "diff"])
                     
                     if "commit" in cmd.lower():
@@ -649,7 +678,7 @@ class AIDeveloperHarness:
                             status="ERROR",
                             summary="Lỗi bảo mật Harness.",
                             details=f"Harness nghiêm cấm chạy các lệnh tùy ý. Lệnh hợp lệ: {', '.join(allowed_cmds)} hoặc git status/diff/add.",
-                            next_actions=["Chỉ dùng dotnet build, dotnet test, dotnet restore, dotnet clean, git status, git diff, git add."]
+                            next_actions=[f"Chỉ dùng {', '.join(allowed_cmds)}, git status, git diff, git add."]
                         )
                     else:
                         is_git_change = "git " in cmd and "add" in cmd
@@ -921,9 +950,8 @@ class AIDeveloperHarness:
         scripts_dir = os.path.dirname(harness_dir)
         root_dir = os.path.dirname(scripts_dir)
         
-        # 1. Đọc chính sách lập trình cục bộ (CODING_POLICY.md hoặc CLAUDE.md)
-        policy_files = ["CODING_POLICY.md", "CLAUDE.md"]
-        for p_file in policy_files:
+        # 1. Đọc chính sách lập trình cục bộ
+        for p_file in self.policy_files:
             p_path = os.path.join(root_dir, p_file)
             if os.path.exists(p_path):
                 try:

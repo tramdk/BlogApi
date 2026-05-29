@@ -1,0 +1,19 @@
+{
+  "policy_files": [
+    "CODING_POLICY.md",
+    "CLAUDE.md"
+  ],
+  "skills_and_guides": [
+    "docs/guides/DDD_GUIDE.md",
+    "skills/analyzing-dotnet-performance/SKILL.md",
+    "skills/dotnet-best-practices/SKILL.md",
+    "skills/nuget-manager/SKILL.md",
+    "skills/optimizing-ef-core-queries/SKILL.md"
+  ],
+  "allowed_commands": [
+    "dotnet build",
+    "dotnet test",
+    "dotnet restore",
+    "dotnet clean"
+  ]
+}

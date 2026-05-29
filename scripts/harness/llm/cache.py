@@ -46,7 +46,7 @@ def generate_directory_tree(root_dir: str) -> str:
     walk(root_dir)
     return "\n".join(lines)
 
-def build_cache_contents(root_dir: str, policy_content: str, lessons_content: str) -> list[str]:
+def build_cache_contents(root_dir: str, policy_content: str, lessons_content: str, skills_contents: list = None) -> list[str]:
     """Tạo nội dung tĩnh lớn (mã nguồn, cây thư mục, coding policy) để kích hoạt Gemini Context Cache (>32k tokens)."""
     contents = []
     
@@ -54,14 +54,20 @@ def build_cache_contents(root_dir: str, policy_content: str, lessons_content: st
     if policy_content:
         contents.append(f"--- CODING POLICY (BẮT BUỘC TUÂN THỦ) ---\n{policy_content}")
         
-    # 1b. DDD Guide
-    ddd_guide_path = os.path.join(root_dir, "docs", "guides", "DDD_GUIDE.md")
-    if os.path.exists(ddd_guide_path):
-        try:
-            with open(ddd_guide_path, "r", encoding="utf-8") as df:
-                contents.append(f"--- DDD ARCHITECTURE & DESIGN GUIDELINES ---\n{df.read()}")
-        except Exception:
-            pass
+    # 1b. Skills & Guides
+    if skills_contents:
+        for s_file, s_content in skills_contents:
+            title = os.path.basename(s_file).replace(".md", "").upper().replace("_", " ")
+            contents.append(f"--- {title} REFERATIVE GUIDELINES ({s_file}) ---\n{s_content}")
+    else:
+        # Fallback cho DDD Guide nếu không truyền skills_contents
+        ddd_guide_path = os.path.join(root_dir, "docs", "guides", "DDD_GUIDE.md")
+        if os.path.exists(ddd_guide_path):
+            try:
+                with open(ddd_guide_path, "r", encoding="utf-8") as df:
+                    contents.append(f"--- DDD ARCHITECTURE & DESIGN GUIDELINES ---\n{df.read()}")
+            except Exception:
+                pass
         
     # 1c. Harness Lessons Learned
     if lessons_content:
