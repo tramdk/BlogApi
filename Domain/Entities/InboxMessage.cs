@@ -26,4 +26,14 @@ public class InboxMessage
     /// Gets or sets the timestamp when the message/event was successfully processed.
     /// </summary>
     public DateTime? ProcessedOnUtc { get; set; }
+
+    /// <summary>
+    /// Gets or sets the payment gateway name if applicable.
+    /// </summary>
+    public string? Gateway { get; set; }
+
+    /// <summary>
+    /// Gets or sets the payload if applicable.
+    /// </summary>
+    public string? Payload { get; set; }
 }

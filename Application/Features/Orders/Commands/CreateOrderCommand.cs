@@ -10,7 +10,7 @@ using FloraCore.Application.Features.Orders.Events;
 
 namespace FloraCore.Application.Features.Orders.Commands;
 
-public record CreateOrderCommand(Guid UserId, Address ShippingAddress, string IdempotencyKey = "") : IRequest<Guid>, IIdempotentCommand;
+public record CreateOrderCommand(Guid UserId, Address ShippingAddress, string IdempotencyKey = "", string PaymentMethod = "VNPAY") : IRequest<Guid>, IIdempotentCommand;
 
 public class CreateOrderCommandHandler(
     IOrderRepository repository, 
@@ -31,6 +31,8 @@ public class CreateOrderCommandHandler(
             ShippingAddress = request.ShippingAddress,
             OrderStatus = Domain.Constants.OrderStatus.Pending,
             TotalAmount = 0,
+            PaymentMethod = request.PaymentMethod,
+            PaymentStatus = Domain.Constants.PaymentStatus.Pending,
             OrderItems = new List<OrderItem>()
         };
 

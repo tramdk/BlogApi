@@ -9,7 +9,29 @@ using FloraCore.Middleware;
 
 
 
+// Load local .env file if exists to local environment variables
+var envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+if (File.Exists(envPath))
+{
+    foreach (var line in File.ReadAllLines(envPath))
+    {
+        var parts = line.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 2)
+        {
+            var key = parts[0].Trim();
+            var val = parts[1].Trim(' ', '"', '\'');
+            if (!key.StartsWith('#') && string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
+            {
+                Environment.SetEnvironmentVariable(key, val);
+            }
+        }
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Enable configuration placeholders substitution from Environment Variables
+builder.Configuration.AddEnvironmentVariables();
 
 // Clear default claim type mapping for JWT
 JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();

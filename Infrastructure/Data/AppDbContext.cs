@@ -102,6 +102,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     /// </summary>
     public DbSet<OrderStatusHistory> OrderStatusHistories => Set<OrderStatusHistory>();
 
+    /// <summary>
+    /// Gets or sets the payment transactions.
+    /// </summary>
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -233,6 +238,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         {
             entity.HasKey(i => i.Id);
             entity.Property(i => i.EventName).IsRequired();
+        });
+
+        builder.Entity<PaymentTransaction>(entity =>
+        {
+            entity.HasKey(pt => pt.Id);
+            entity.Property(pt => pt.Amount).HasColumnType("decimal(18,2)");
+            entity.HasOne(pt => pt.Order)
+                .WithMany()
+                .HasForeignKey(pt => pt.OrderId);
         });
     }
 }

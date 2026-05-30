@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 using FloraCore.Application.Common.Constants;
 using FloraCore.Application.Interfaces;
 using System;
+using FloraCore.Application.Common.Models;
+using Microsoft.Extensions.Configuration;
 
 namespace FloraCore.Application.Features.Orders.Events;
 
@@ -20,6 +22,8 @@ public class OrderCreatedEventHandler(
     IOrderRepository orderRepository,
     IEmailService emailService,
     IUnitOfWork unitOfWork,
+    IGenericRepository<OutboxMessage, Guid> outboxRepository,
+    IConfiguration configuration,
     ILogger<OrderCreatedEventHandler> logger) : INotificationHandler<OrderCreatedEvent>
 {
     private readonly UserManager<AppUser> _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
@@ -27,6 +31,8 @@ public class OrderCreatedEventHandler(
     private readonly IOrderRepository _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
     private readonly IEmailService _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
     private readonly IUnitOfWork _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+    private readonly IGenericRepository<OutboxMessage, Guid> _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
+    private readonly IConfiguration _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     private readonly ILogger<OrderCreatedEventHandler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
@@ -40,6 +46,32 @@ public class OrderCreatedEventHandler(
             var order = await _orderRepository.GetByIdAsync(notification.OrderId);
             if (order != null)
             {
+                // Stage payment outbox message if it's not COD
+                if (order.PaymentMethod != "COD")
+                {
+                    var apiUrl = _configuration["PaymentGateways:ApiUrl"];
+                    if (string.IsNullOrEmpty(apiUrl))
+                    {
+                        throw new InvalidOperationException("PaymentGateways:ApiUrl configuration is missing.");
+                    }
+                    var paymentPayload = System.Text.Json.JsonSerializer.Serialize(new OrderPaymentDto
+                    {
+                        OrderId = order.Id,
+                        Amount = order.TotalAmount,
+                        Description = $"Thanh toan don hang {order.Id}",
+                        ReturnUrl = $"{apiUrl}/api/v1/payments/vnpay-callback"
+                    });
+
+                    var outbox = new OutboxMessage
+                    {
+                        Id = Guid.NewGuid(),
+                        Type = "OrderCreatedPaymentEvent",
+                        Content = paymentPayload,
+                        OccurredOnUtc = DateTime.UtcNow
+                    };
+                    await _outboxRepository.StageAddAsync(outbox);
+                }
+
                 // Fetch user
                 var user = await _userManager.FindByIdAsync(order.UserId.ToString());
                 if (user != null && !string.IsNullOrEmpty(user.Email))

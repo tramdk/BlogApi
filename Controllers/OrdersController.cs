@@ -62,6 +62,37 @@ public class OrdersController(IMediator mediator) : ControllerBase
         return result ? NoContent() : NotFound();
     }
 
+    /// <summary>
+    /// Updates order shipping details and/or payment method (Combined flow).
+    /// </summary>
+    [HttpPut("{id}/details")]
+    public async Task<IActionResult> UpdateDetails(Guid id, UpdateOrderDetailsCommand command)
+    {
+        if (id != command.Id) return BadRequest();
+        var result = await _mediator.Send(command);
+        return result ? NoContent() : BadRequest("Cannot update details of an order that is not pending or already paid.");
+    }
+
+    /// <summary>
+    /// Invokes the online payment processing to retrieve a fresh payment URL (Lazy generation).
+    /// </summary>
+    [HttpPost("{id}/pay")]
+    public async Task<IActionResult> Pay(Guid id, [FromServices] Microsoft.Extensions.Configuration.IConfiguration configuration)
+    {
+        var apiUrl = configuration["PaymentGateways:ApiUrl"];
+        if (string.IsNullOrEmpty(apiUrl))
+        {
+            return BadRequest("ApiUrl configuration is missing.");
+        }
+
+        var result = await _mediator.Send(new InvokePaymentCommand(id, apiUrl));
+        if (result.Success)
+        {
+            return Ok(result);
+        }
+        return BadRequest(result.Message);
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id)
     {

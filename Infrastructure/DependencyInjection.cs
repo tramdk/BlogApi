@@ -6,6 +6,7 @@ using FloraCore.Domain.Entities;
 using FloraCore.Infrastructure.Data;
 using FloraCore.Infrastructure.Repositories;
 using FloraCore.Infrastructure.Services;
+using FloraCore.Infrastructure.Services.Payments;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -134,6 +135,13 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IChatService, ChatService>();
+
+        // Register Vietnamese Payment Integrations
+        services.AddScoped<IPaymentService, VnPayService>();
+        services.AddScoped<IPaymentService, MoMoService>();
+        services.AddScoped<IPaymentService, PayOsService>();
+        services.AddScoped<IPaymentServiceFactory, PaymentServiceFactory>();
+        services.AddScoped<IIdempotentPaymentHandler, IdempotentPaymentHandler>();
 
         return services;
     }

@@ -13,6 +13,9 @@ public class Order
     public Address ShippingAddress { get; set; } = null!;
     public string OrderStatus { get; set; } = string.Empty;
     public decimal TotalAmount { get; set; }
+    public string PaymentMethod { get; set; } = string.Empty;
+    public string PaymentStatus { get; set; } = string.Empty;
+    public string? PaymentUrl { get; set; }
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 
     /// <summary>

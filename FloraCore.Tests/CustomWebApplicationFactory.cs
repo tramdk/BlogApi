@@ -26,13 +26,44 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("SKIP_REDIS", "true");
         // Ensure roles and initial data are seeded for integration tests
         Environment.SetEnvironmentVariable("SEED_DATA", "true");
+        Environment.SetEnvironmentVariable("Jwt__Secret", "YourSuperSecretKeyWithAtLeast32Characters!");
+        Environment.SetEnvironmentVariable("Cloudinary__CloudName", "test");
+        Environment.SetEnvironmentVariable("Cloudinary__ApiKey", "test");
+        Environment.SetEnvironmentVariable("Cloudinary__ApiSecret", "test");
+        Environment.SetEnvironmentVariable("MailSettings__Server", "test");
+        Environment.SetEnvironmentVariable("MailSettings__SenderName", "test");
+        Environment.SetEnvironmentVariable("MailSettings__SenderEmail", "test");
+        Environment.SetEnvironmentVariable("MailSettings__Username", "test");
+        Environment.SetEnvironmentVariable("MailSettings__Password", "test");
+        Environment.SetEnvironmentVariable("PaymentGateways__ApiUrl", "http://localhost:5000");
+        Environment.SetEnvironmentVariable("PaymentGateways__FrontendUrl", "http://localhost:3000");
+        Environment.SetEnvironmentVariable("PaymentGateways__VnPay__Url", "https://test");
+        Environment.SetEnvironmentVariable("PaymentGateways__VnPay__TmnCode", "test");
+        Environment.SetEnvironmentVariable("PaymentGateways__VnPay__HashSecret", "test");
+        Environment.SetEnvironmentVariable("PaymentGateways__MoMo__Url", "https://test");
+        Environment.SetEnvironmentVariable("PaymentGateways__MoMo__PartnerCode", "test");
+        Environment.SetEnvironmentVariable("PaymentGateways__MoMo__AccessKey", "test");
+        Environment.SetEnvironmentVariable("PaymentGateways__MoMo__SecretKey", "test");
+        Environment.SetEnvironmentVariable("PaymentGateways__PayOS__Url", "https://test");
+        Environment.SetEnvironmentVariable("PaymentGateways__PayOS__ClientId", "test");
+        Environment.SetEnvironmentVariable("PaymentGateways__PayOS__ApiKey", "test");
+        Environment.SetEnvironmentVariable("PaymentGateways__PayOS__ChecksumKey", "test");
 
         builder.UseEnvironment("Testing");
         
         // Configure test configuration (e.g., upload folder)
         builder.ConfigureAppConfiguration((context, config) => {
-            config.AddInMemoryCollection(new Dictionary<string, string> {
-                {"FileStorage:UploadFolder", "test_uploads"}
+            config.AddInMemoryCollection(new Dictionary<string, string?> {
+                {"FileStorage:UploadFolder", "test_uploads"},
+                {"Jwt:Secret", "YourSuperSecretKeyWithAtLeast32Characters!"},
+                {"Cloudinary:CloudName", "test"},
+                {"Cloudinary:ApiKey", "test"},
+                {"Cloudinary:ApiSecret", "test"},
+                {"MailSettings:Server", "test"},
+                {"MailSettings:SenderName", "test"},
+                {"MailSettings:SenderEmail", "test"},
+                {"MailSettings:Username", "test"},
+                {"MailSettings:Password", "test"}
             });
         });
 

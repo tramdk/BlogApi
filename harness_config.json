@@ -12,8 +12,16 @@
   ],
   "allowed_commands": [
     "dotnet build",
+    "dotnet build FloraCore.csproj",
     "dotnet test",
+    "dotnet test --filter",
     "dotnet restore",
-    "dotnet clean"
+    "dotnet clean",
+    "codegraph sync",
+    "git status",
+    "git diff",
+    "git add",
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\final-check.ps1 validate-all",
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\final-check.ps1 validate-policy"
   ]
 }
