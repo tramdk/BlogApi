@@ -35,6 +35,18 @@ public class OrdersController(IMediator mediator) : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Gets the current authenticated user's orders with pagination and status filtering.
+    /// </summary>
+    /// <param name="query">The pagination and filter options.</param>
+    /// <returns>A paged list of the user's orders.</returns>
+    [HttpGet("my")]
+    public async Task<IActionResult> GetMyOrders([FromQuery] GetMyOrdersQuery query)
+    {
+        var result = await _mediator.Send(query);
+        return Ok(result);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateOrderCommand command)
     {
