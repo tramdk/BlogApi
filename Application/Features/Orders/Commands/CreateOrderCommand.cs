@@ -6,15 +6,20 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FloraCore.Application.Interfaces;
+using FloraCore.Application.Features.Orders.Events;
 
 namespace FloraCore.Application.Features.Orders.Commands;
 
 public record CreateOrderCommand(Guid UserId, Address ShippingAddress, string IdempotencyKey = "") : IRequest<Guid>, IIdempotentCommand;
 
-public class CreateOrderCommandHandler(IOrderRepository repository, IAdminNotificationService adminNotificationService) : IRequestHandler<CreateOrderCommand, Guid>
+public class CreateOrderCommandHandler(
+    IOrderRepository repository, 
+    IAdminNotificationService adminNotificationService,
+    IMediator mediator) : IRequestHandler<CreateOrderCommand, Guid>
 {
     private readonly IOrderRepository _repository = repository ?? throw new ArgumentNullException(nameof(repository));
     private readonly IAdminNotificationService _adminNotificationService = adminNotificationService ?? throw new ArgumentNullException(nameof(adminNotificationService));
+    private readonly IMediator _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
 
     public async Task<Guid> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
@@ -40,6 +45,7 @@ public class CreateOrderCommandHandler(IOrderRepository repository, IAdminNotifi
 
         await _repository.AddAsync(order);
         await _adminNotificationService.SendNewOrderNotification(order.Id);
+        await _mediator.Publish(new OrderCreatedEvent(order.Id), cancellationToken);
         return order.Id;
     }
 }

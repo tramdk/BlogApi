@@ -73,6 +73,10 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
             // Override IFileService with FakeFileService
             services.AddScoped<IFileService, FloraCore.Tests.Mocks.FakeFileService>();
+
+            // Override IEmailService with Mock to prevent SMTP connection during tests
+            var mockEmailService = new Moq.Mock<IEmailService>();
+            services.AddSingleton(mockEmailService.Object);
         });
     }
 

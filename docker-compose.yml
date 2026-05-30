@@ -33,6 +33,12 @@ services:
       - Cloudinary__CloudName=${CLOUDINARY_CLOUD_NAME}
       - Cloudinary__ApiKey=${CLOUDINARY_API_KEY}
       - Cloudinary__ApiSecret=${CLOUDINARY_API_SECRET}
+      - MailSettings__Server=${MAIL_SERVER}
+      - MailSettings__Port=${MAIL_PORT}
+      - MailSettings__SenderName=${MAIL_SENDER_NAME}
+      - MailSettings__SenderEmail=${MAIL_SENDER_EMAIL}
+      - MailSettings__Username=${MAIL_USERNAME}
+      - MailSettings__Password=${MAIL_PASSWORD}
       - Telemetry__OtlpEndpoint=http://otel-collector:4317
       - Telemetry__ExportToConsole=false
     ports:

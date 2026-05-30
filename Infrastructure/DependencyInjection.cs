@@ -104,9 +104,13 @@ public static class DependencyInjection
         services.AddScoped<IAdminNotificationService, AdminNotificationService>();
         services.AddScoped<OutboxProcessor>();
         services.AddScoped<IInboxService, InboxService>();
+        services.AddScoped<IEmailService, EmailService>();
 
         // Configure JwtSettings
         services.Configure<JwtSettings>(configuration.GetSection("Jwt"));
+
+        // Configure MailSettings
+        services.Configure<MailSettings>(configuration.GetSection(MailSettings.SectionName));
 
         // Configure Cloudinary
         services.Configure<CloudinarySettings>(configuration.GetSection("Cloudinary"));

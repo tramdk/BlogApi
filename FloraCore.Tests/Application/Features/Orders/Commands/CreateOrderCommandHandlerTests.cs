@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using Xunit;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using MediatR;
+using FloraCore.Application.Features.Orders.Events;
 
 namespace FloraCore.Tests.Application.Features.Orders.Commands
 {
@@ -22,9 +24,13 @@ namespace FloraCore.Tests.Application.Features.Orders.Commands
             // Arrange
             var mockOrderRepository = new Mock<IOrderRepository>();
             var mockAdminNotificationService = new Mock<IAdminNotificationService>();
+            var mockMediator = new Mock<IMediator>();
             var mockLogger = new Mock<ILogger<CreateOrderCommandHandler>>();
 
-            var handler = new CreateOrderCommandHandler(mockOrderRepository.Object, mockAdminNotificationService.Object);
+            var handler = new CreateOrderCommandHandler(
+                mockOrderRepository.Object, 
+                mockAdminNotificationService.Object,
+                mockMediator.Object);
 
             var command = new CreateOrderCommand(
                 UserId: Guid.NewGuid(),
@@ -49,6 +55,7 @@ namespace FloraCore.Tests.Application.Features.Orders.Commands
             result.Should().Be(createdOrderId);
 
             mockOrderRepository.Verify(repo => repo.AddAsync(It.IsAny<Order>()), Times.Once);
+            mockMediator.Verify(m => m.Publish(It.Is<OrderCreatedEvent>(e => e.OrderId == createdOrderId), It.IsAny<CancellationToken>()), Times.Once);
             savedOrder.Should().NotBeNull();
             savedOrder!.StatusHistories.Should().HaveCount(1);
             var history = savedOrder.StatusHistories.GetEnumerator();
