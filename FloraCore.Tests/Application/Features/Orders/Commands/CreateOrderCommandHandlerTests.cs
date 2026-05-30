@@ -32,12 +32,14 @@ namespace FloraCore.Tests.Application.Features.Orders.Commands
                 IdempotencyKey: ""
             );
 
+            Order? savedOrder = null;
             Guid createdOrderId = Guid.NewGuid();
             mockOrderRepository.Setup(repo => repo.AddAsync(It.IsAny<Order>()))
                 .Returns(Task.CompletedTask)
                 .Callback<Order>(order =>
                 {
                     order.Id = createdOrderId;
+                    savedOrder = order;
                 });
 
             // Act
@@ -47,6 +49,12 @@ namespace FloraCore.Tests.Application.Features.Orders.Commands
             result.Should().Be(createdOrderId);
 
             mockOrderRepository.Verify(repo => repo.AddAsync(It.IsAny<Order>()), Times.Once);
+            savedOrder.Should().NotBeNull();
+            savedOrder!.StatusHistories.Should().HaveCount(1);
+            var history = savedOrder.StatusHistories.GetEnumerator();
+            history.MoveNext().Should().BeTrue();
+            history.Current.FromStatus.Should().BeEmpty();
+            history.Current.ToStatus.Should().Be("Pending");
         }
     }
 }

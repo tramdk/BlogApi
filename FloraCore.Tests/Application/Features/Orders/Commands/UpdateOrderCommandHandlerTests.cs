@@ -39,6 +39,12 @@ public class UpdateOrderCommandHandlerTests
         result.Should().BeTrue();
         _mockOrderRepository.Verify(r => r.GetByIdAsync(orderId), Times.Once);
         _mockOrderRepository.Verify(r => r.UpdateAsync(It.Is<Order>(o => o.Id == orderId && o.OrderStatus == "Shipped")), Times.Once);
+
+        existingOrder.StatusHistories.Should().HaveCount(1);
+        var history = existingOrder.StatusHistories.GetEnumerator();
+        history.MoveNext().Should().BeTrue();
+        history.Current.FromStatus.Should().Be("Pending");
+        history.Current.ToStatus.Should().Be("Shipped");
     }
 
     [Fact]

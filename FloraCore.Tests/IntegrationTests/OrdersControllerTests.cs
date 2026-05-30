@@ -69,6 +69,69 @@ namespace FloraCore.Tests.IntegrationTests
             // Verify that a notification was sent
             adminNotificationServiceMock.Verify(x => x.SendNewOrderNotification(It.IsAny<Guid>()), Times.Once);
         }
+
+        [Fact]
+        public async Task GetOrders_AsRegularUser_ReturnsForbidden()
+        {
+            // Arrange
+            var registerCommand = new RegisterCommand(
+                Email: $"user{Guid.NewGuid()}@example.com",
+                Password: "P@sswOrd123",
+                FullName: "Regular User"
+            );
+
+            var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerCommand);
+            registerResponse.EnsureSuccessStatusCode();
+
+            var loginCommand = new LoginCommand(
+                Email: registerCommand.Email,
+                Password: registerCommand.Password
+            );
+
+            var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginCommand);
+            loginResponse.EnsureSuccessStatusCode();
+
+            var authResponse = await loginResponse.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", authResponse!.Data!.AccessToken);
+
+            // Act
+            var response = await _client.GetAsync("/api/v1/orders");
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+
+        [Fact]
+        public async Task GetOrders_AsAdmin_ReturnsSuccess()
+        {
+            // Arrange
+            var registerCommand = new RegisterCommand(
+                Email: $"admin{Guid.NewGuid()}@example.com",
+                Password: "P@sswOrd123",
+                FullName: "Admin User",
+                Role: "Admin"
+            );
+
+            var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerCommand);
+            registerResponse.EnsureSuccessStatusCode();
+
+            var loginCommand = new LoginCommand(
+                Email: registerCommand.Email,
+                Password: registerCommand.Password
+            );
+
+            var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginCommand);
+            loginResponse.EnsureSuccessStatusCode();
+
+            var authResponse = await loginResponse.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
+            _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", authResponse!.Data!.AccessToken);
+
+            // Act
+            var response = await _client.GetAsync("/api/v1/orders");
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
     }
 
     // Override CustomWebApplicationFactory to replace IAdminNotificationService with a Mock

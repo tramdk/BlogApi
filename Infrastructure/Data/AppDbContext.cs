@@ -97,6 +97,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     /// </summary>
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
+    /// <summary>
+    /// Gets or sets the order status histories.
+    /// </summary>
+    public DbSet<OrderStatusHistory> OrderStatusHistories => Set<OrderStatusHistory>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -214,6 +219,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             entity.HasOne(oi => oi.Product)
                 .WithMany()
                 .HasForeignKey(oi => oi.ProductId);
+        });
+
+        builder.Entity<OrderStatusHistory>(entity =>
+        {
+            entity.HasOne(osh => osh.Order)
+                .WithMany(o => o.StatusHistories)
+                .HasForeignKey(osh => osh.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<InboxMessage>(entity =>

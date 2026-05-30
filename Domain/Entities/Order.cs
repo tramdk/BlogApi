@@ -14,4 +14,9 @@ public class Order
     public string OrderStatus { get; set; } = string.Empty;
     public decimal TotalAmount { get; set; }
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
+
+    /// <summary>
+    /// Gets or sets the collection of order status change histories.
+    /// </summary>
+    public ICollection<OrderStatusHistory> StatusHistories { get; set; } = new List<OrderStatusHistory>();
 }

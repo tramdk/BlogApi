@@ -28,9 +28,10 @@ public class OrdersController(IMediator mediator) : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    [Authorize(Roles = RoleConstants.Admin)]
+    public async Task<IActionResult> GetOrders([FromQuery] GetOrdersQuery query)
     {
-        var result = await _mediator.Send(new GetOrdersQuery());
+        var result = await _mediator.Send(query);
         return Ok(result);
     }
 

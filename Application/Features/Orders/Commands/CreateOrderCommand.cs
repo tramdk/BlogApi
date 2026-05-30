@@ -29,6 +29,15 @@ public class CreateOrderCommandHandler(IOrderRepository repository, IAdminNotifi
             OrderItems = new List<OrderItem>()
         };
 
+        order.StatusHistories.Add(new OrderStatusHistory
+        {
+            Id = Guid.NewGuid(),
+            OrderId = order.Id,
+            FromStatus = string.Empty,
+            ToStatus = Domain.Constants.OrderStatus.Pending,
+            ChangedAt = DateTime.UtcNow
+        });
+
         await _repository.AddAsync(order);
         await _adminNotificationService.SendNewOrderNotification(order.Id);
         return order.Id;

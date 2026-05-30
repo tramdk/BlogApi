@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Xunit;
 using FluentAssertions;
 using FloraCore.Application.Interfaces;
+using FloraCore.Application.Common.Models;
 
 namespace FloraCore.Tests.Application.Features.Orders.Queries;
 
@@ -28,7 +29,8 @@ public class GetOrderByIdQueryHandlerTests
         // Arrange
         var orderId = Guid.NewGuid();
         var existingOrder = new Order { Id = orderId, UserId = Guid.NewGuid(), OrderStatus = "Pending" };
-        _mockOrderRepository.Setup(r => r.GetByIdAsync(orderId)).ReturnsAsync(existingOrder);
+        _mockOrderRepository.Setup(r => r.GetSingleWithOptionsAsync(It.IsAny<QueryOptions<Order>>()))
+            .ReturnsAsync(existingOrder);
 
         var query = new GetOrderByIdQuery(orderId);
 
@@ -37,7 +39,7 @@ public class GetOrderByIdQueryHandlerTests
 
         // Assert
         result.Should().NotBeNull();
-        result.Id.Should().Be(orderId);
+        result!.Id.Should().Be(orderId);
         result.UserId.Should().Be(existingOrder.UserId);
         result.OrderStatus.Should().Be(existingOrder.OrderStatus);
     }
@@ -47,7 +49,8 @@ public class GetOrderByIdQueryHandlerTests
     {
         // Arrange
         var orderId = Guid.NewGuid();
-        _mockOrderRepository.Setup(r => r.GetByIdAsync(orderId)).ReturnsAsync((Order)null);
+        _mockOrderRepository.Setup(r => r.GetSingleWithOptionsAsync(It.IsAny<QueryOptions<Order>>()))
+            .ReturnsAsync((Order?)null);
 
         var query = new GetOrderByIdQuery(orderId);
 
@@ -56,6 +59,6 @@ public class GetOrderByIdQueryHandlerTests
 
         // Assert
         result.Should().BeNull();
-        _mockOrderRepository.Verify(r => r.GetByIdAsync(orderId), Times.Once);
+        _mockOrderRepository.Verify(r => r.GetSingleWithOptionsAsync(It.IsAny<QueryOptions<Order>>()), Times.Once);
     }
 }
