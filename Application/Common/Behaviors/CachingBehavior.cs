@@ -8,17 +8,13 @@ using Microsoft.Extensions.Logging;
 
 namespace FloraCore.Application.Common.Behaviors;
 
-public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse> 
+public class CachingBehavior<TRequest, TResponse>(
+    HybridCache cache,
+    ILogger<CachingBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse> 
     where TRequest : IRequest<TResponse>
 {
-    private readonly HybridCache _cache;
-    private readonly ILogger<CachingBehavior<TRequest, TResponse>> _logger;
-
-    public CachingBehavior(HybridCache cache, ILogger<CachingBehavior<TRequest, TResponse>> logger)
-    {
-        _cache = cache;
-        _logger = logger;
-    }
+    private readonly HybridCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+    private readonly ILogger<CachingBehavior<TRequest, TResponse>> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {

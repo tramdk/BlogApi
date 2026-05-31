@@ -9,21 +9,10 @@ namespace FloraCore.Infrastructure.Services;
 /// <summary>
 /// Service for blacklisting JWT tokens.
 /// </summary>
-public class TokenBlacklistService : ITokenBlacklistService
+public class TokenBlacklistService(IDistributedCache cache, ILogger<TokenBlacklistService> logger) : ITokenBlacklistService
 {
-    private readonly IDistributedCache _cache;
-    private readonly ILogger<TokenBlacklistService> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TokenBlacklistService"/> class.
-    /// </summary>
-    /// <param name="cache">The distributed cache.</param>
-    /// <param name="logger">The logger.</param>
-    public TokenBlacklistService(IDistributedCache cache, ILogger<TokenBlacklistService> logger)
-    {
-        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+    private readonly IDistributedCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+    private readonly ILogger<TokenBlacklistService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
     /// Blacklists a token by adding it to the cache with an expiration time.

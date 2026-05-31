@@ -84,5 +84,39 @@ TOOLS_SCHEMA = [
                 "required": ["summary"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "codegraph_query",
+            "description": "Tìm kiếm định nghĩa lớp, phương thức, thuộc tính hoặc tệp tin trong toàn bộ codebase bằng CodeGraph.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "search": {
+                        "type": "string",
+                        "description": "Từ khóa tìm kiếm symbol (ví dụ: 'PaymentService', 'ProcessPaymentAsync')"
+                    }
+                },
+                "required": ["search"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "codegraph_get_context",
+            "description": "Thu thập toàn bộ ngữ cảnh, tệp tin và cấu trúc liên quan đến một tác vụ kỹ thuật cụ thể bằng CodeGraph.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "description": "Mô tả tác vụ kỹ thuật (ví dụ: 'tạo API thanh toán qua ZaloPay')"
+                    }
+                },
+                "required": ["task"]
+            }
+        }
     }
 ]

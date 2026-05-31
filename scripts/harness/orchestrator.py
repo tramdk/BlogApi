@@ -81,9 +81,9 @@ class AIDeveloperHarness:
         
         # Per-role iteration budgets (Fix 1: tránh agent loop vô tận)
         self.role_max_iterations = {
-            "Planner": int(os.getenv("HARNESS_PLANNER_MAX_ITER") or 8),
-            "TestWriter": int(os.getenv("HARNESS_TESTWRITER_MAX_ITER") or 12),
-            "Developer": int(os.getenv("HARNESS_DEVELOPER_MAX_ITER") or 40),
+            "Planner": int(os.getenv("HARNESS_PLANNER_MAX_ITER") or (self.max_iterations if self.max_iterations == -1 else 8)),
+            "TestWriter": int(os.getenv("HARNESS_TESTWRITER_MAX_ITER") or (self.max_iterations if self.max_iterations == -1 else 12)),
+            "Developer": int(os.getenv("HARNESS_DEVELOPER_MAX_ITER") or (self.max_iterations if self.max_iterations == -1 else 40)),
             "Enricher": 3
         }
         
@@ -597,7 +597,10 @@ class AIDeveloperHarness:
         
         # Fix 1: Per-role iteration budget
         effective_max = self.role_max_iterations.get(role, self.max_iterations)
-        print(f"📊 [Harness]: Budget cho {role}: tối đa {effective_max} iterations")
+        is_infinite = (effective_max == -1)
+        if is_infinite:
+            effective_max = 999999
+        print(f"📊 [Harness]: Budget cho {role}: " + ("vô hạn (loop tới khi xong)" if is_infinite else f"tối đa {effective_max} iterations"))
         
         # Khởi tạo messages array với tin nhắn user đầu tiên
         messages = [
@@ -1128,11 +1131,13 @@ class AIDeveloperHarness:
         # Loại bỏ các mô tả triết lý rườm rà, tập trung 100% vào action guidelines và rules thực thi.
         tool_usage_note = (
             "\n--- HƯỚNG DẪN TOOL (MỖI LƯỢT GỌI ĐÚNG 1 TOOL) ---\n"
-            "1. view_source(file_path, start_line?, end_line?) — Đọc source file (phân trang dòng nếu file dài).\n"
-            "2. write_source(file_path, content) — Ghi mới hoặc ghi đè file.\n"
-            "3. execute_command(command) — Chạy build/test/clean hoặc git status/diff/add.\n"
-            "4. finish_task(summary) — Báo cáo kết thúc pha.\n"
-            "🧠 NGUYÊN TẮC: ĐỌC TRƯỚC KHI GHI (luôn view_source file đích trước khi write). Không đoán mò signature. Một bước một hành động.\n"
+            "1. codegraph_query(search) — ƯU TIÊN SỬ DỤNG: Tìm kiếm định nghĩa lớp, phương thức, thuộc tính hoặc tệp tin bằng CodeGraph trước khi view_source.\n"
+            "2. codegraph_get_context(task) — ƯU TIÊN SỬ DỤNG: Thu thập toàn bộ ngữ cảnh, tệp tin và cấu trúc liên quan đến tác vụ kỹ thuật cụ thể.\n"
+            "3. view_source(file_path, start_line?, end_line?) — Đọc source file (phân trang dòng nếu file dài).\n"
+            "4. write_source(file_path, content) — Ghi mới hoặc ghi đè file.\n"
+            "5. execute_command(command) — Chạy build/test/clean hoặc git status/diff/add.\n"
+            "6. finish_task(summary) — Báo cáo kết thúc pha.\n"
+            "🧠 NGUYÊN TẮC: ĐỒNG BỘ & ĐỌC TRƯỚC KHI GHI (luôn sử dụng codegraph_query/codegraph_get_context đầu tiên để định vị symbol, sau đó view_source trước khi write). Không đoán mò signature. Một bước một hành động.\n"
         )
 
         architecture_guidelines = (
@@ -1148,7 +1153,7 @@ class AIDeveloperHarness:
             "  - TUYỆT ĐỐI KHÔNG ghi logic thực tế vào file .cs. TUYỆT ĐỐI KHÔNG gọi `execute_command`.\n"
             "🚨 QUY TRÌNH BẮT BUỘC:\n"
             "  1. Không gọi finish_task ở lượt đầu tiên.\n"
-            "  2. Khảo sát cấu trúc hiện có qua view_source.\n"
+            "  2. Khảo sát cấu trúc hiện có qua codegraph_query/codegraph_get_context.\n"
             "  3. Viết Bản kế hoạch Markdown chi tiết vào file `docs/plans/execution_plan.md`.\n"
             "  4. Tạo các file khung xương/stub rỗng (chỉ khai báo namespace đúng, constructor signature và ném NotImplementedException) cho toàn bộ class dự kiến tạo mới.\n"
             "  5. Gọi `finish_task` sau khi hoàn thành 4 bước trên.\n"
@@ -1178,7 +1183,7 @@ class AIDeveloperHarness:
             "\n🚨 NGUYÊN TẮC CHẨN ĐOÁN LỖI (RCA) - THOUGHT PHẢI CÓ:\n"
             "  1. SYMPTOMS (Lỗi nhận được là gì?) | 2. TRACE (Dòng nào, stack trace?) | 3. ROOT CAUSE (Tại sao lỗi?) | 4. RESOLUTION (Hướng fix triệt để)\n"
             "\n🚨 QUY TRÌNH PHÁT TRIỂN:\n"
-            "  - BƯỚC 0: ĐỌC test expectation TRƯỚC: dùng `view_source` xem file test trong FloraCore.Tests/ để biết method signature, expected behavior.\n"
+            "  - BƯỚC 0: ĐỌC test expectation TRƯỚC: dùng `codegraph_query` để tìm file test, xem bằng `view_source` trong FloraCore.Tests/ để biết method signature, expected behavior.\n"
             "  - BƯỚC 1: Viết 1 file production → BUILD NGAY (`execute_command('dotnet build FloraCore.csproj')`). KHÔNG viết nhiều file cùng lúc. Mỗi lần viết 1 file, build ngay, sửa lỗi, rồi mới viết file tiếp theo.\n"
             "  - BƯỚC 2: Chạy test bằng `execute_command('dotnet test --filter FullyQualifiedName~<KEYWORD>')`. Sửa tất cả lỗi test TRONG MỘT LẦN.\n"
             "  - BƯỚC 3: Chỉ khi Build và Test PASS 100% không vi phạm coding policy mới gọi `finish_task`.\n"

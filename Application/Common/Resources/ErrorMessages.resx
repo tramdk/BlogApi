@@ -70,4 +70,43 @@
   <data name="PaymentConfigMissing" xml:space="preserve">
     <value>PaymentGateways:ApiUrl configuration is missing.</value>
   </data>
+  <data name="FileIsEmpty" xml:space="preserve">
+    <value>File is empty</value>
+  </data>
+  <data name="ObjectIdIsEmpty" xml:space="preserve">
+    <value>objectId is empty</value>
+  </data>
+  <data name="ObjectTypeIsEmpty" xml:space="preserve">
+    <value>objectType is empty</value>
+  </data>
+  <data name="FileExtensionNotAllowed" xml:space="preserve">
+    <value>File extension {0} is not allowed.</value>
+  </data>
+  <data name="FileSizeExceedsLimit" xml:space="preserve">
+    <value>File size exceeds 10MB limit.</value>
+  </data>
+  <data name="UnauthorizedToDeleteFile" xml:space="preserve">
+    <value>You are not authorized to delete this file.</value>
+  </data>
+  <data name="FileNotFound" xml:space="preserve">
+    <value>File not found</value>
+  </data>
+  <data name="UnauthorizedToAccessPrivateFile" xml:space="preserve">
+    <value>You are not authorized to access this private file.</value>
+  </data>
+  <data name="NoDatabaseEntryForObjectId" xml:space="preserve">
+    <value>No database entry found for ObjectId: {0}</value>
+  </data>
+  <data name="PhysicalFileMissing" xml:space="preserve">
+    <value>Physical file missing at: {0}</value>
+  </data>
+  <data name="InvalidTokenAlgorithm" xml:space="preserve">
+    <value>Invalid token algorithm.</value>
+  </data>
+  <data name="InvalidJwtToken" xml:space="preserve">
+    <value>Invalid JWT token.</value>
+  </data>
+  <data name="ErrorValidatingToken" xml:space="preserve">
+    <value>Error validating token.</value>
+  </data>
 </root>

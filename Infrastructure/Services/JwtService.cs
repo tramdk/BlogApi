@@ -12,27 +12,21 @@ using System;
 using System.Collections.Generic;
 using FloraCore.Domain.Exceptions;
 using Microsoft.Extensions.Logging;
+using FloraCore.Application.Common.Interfaces;
 
 namespace FloraCore.Infrastructure.Services;
 
 /// <summary>
 /// Service for generating and validating JWT tokens.
 /// </summary>
-public class JwtService : IJwtService
+public class JwtService(
+    IOptions<JwtSettings> jwtSettings, 
+    ILogger<JwtService> logger,
+    IResourceManager resourceManager) : IJwtService
 {
-    private readonly IOptions<JwtSettings> _jwtSettings;
-    private readonly ILogger<JwtService> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="JwtService"/> class.
-    /// </summary>
-    /// <param name="jwtSettings">The JWT settings.</param>
-    /// <param name="logger">The logger.</param>
-    public JwtService(IOptions<JwtSettings> jwtSettings, ILogger<JwtService> logger)
-    {
-        _jwtSettings = jwtSettings ?? throw new ArgumentNullException(nameof(jwtSettings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+    private readonly IOptions<JwtSettings> _jwtSettings = jwtSettings ?? throw new ArgumentNullException(nameof(jwtSettings));
+    private readonly ILogger<JwtService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IResourceManager _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
 
     /// <summary>
     /// Generates an access token for the given user and roles.
@@ -106,19 +100,19 @@ public class JwtService : IJwtService
 
             if (securityToken is not JwtSecurityToken jwtSecurityToken ||
                 !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-                throw new InvalidJwtTokenException("Invalid token algorithm.");
+                throw new InvalidJwtTokenException(_resourceManager.GetString("InvalidTokenAlgorithm"));
 
             return principal;
         }
         catch (SecurityTokenException ex)
         {
             _logger.LogError(ex, "Invalid JWT token.");
-            throw new InvalidJwtTokenException("Invalid JWT token.", ex);
+            throw new InvalidJwtTokenException(_resourceManager.GetString("InvalidJwtToken"), ex);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error validating token.");
-            throw new InvalidJwtTokenException("Error validating token.", ex);
+            throw new InvalidJwtTokenException(_resourceManager.GetString("ErrorValidatingToken"), ex);
         }
     }
 }
