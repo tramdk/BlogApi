@@ -1,6 +1,7 @@
 
 using FloraCore.Application.Common.Interfaces;
 using FloraCore.Application.Features.Orders.Queries;
+using FloraCore.Application.Features.Orders.DTOs;
 using FloraCore.Domain.Entities;
 using FloraCore.Tests;
 using Moq;

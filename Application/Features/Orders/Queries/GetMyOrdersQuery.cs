@@ -8,6 +8,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using FloraCore.Application.Interfaces;
+using FloraCore.Application.Features.Orders.DTOs;
 
 namespace FloraCore.Application.Features.Orders.Queries;
 
@@ -29,11 +30,12 @@ public record GetMyOrdersQuery(
 /// <summary>
 /// Handler for GetMyOrdersQuery to safely retrieve orders for the current user.
 /// </summary>
-public class GetMyOrdersQueryHandler(IOrderRepository repository, ICurrentUserService currentUserService) 
+public class GetMyOrdersQueryHandler(IOrderRepository repository, ICurrentUserService currentUserService, IResourceManager resourceManager) 
     : IRequestHandler<GetMyOrdersQuery, PagedResult<OrderDto>>
 {
     private readonly IOrderRepository _repository = repository ?? throw new ArgumentNullException(nameof(repository));
     private readonly ICurrentUserService _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
+    private readonly IResourceManager _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
 
     /// <summary>
     /// Handles the retrieval of the current user's orders.
@@ -44,7 +46,7 @@ public class GetMyOrdersQueryHandler(IOrderRepository repository, ICurrentUserSe
     /// <exception cref="UnauthorizedAccessException">Thrown if the user is not authenticated.</exception>
     public async Task<PagedResult<OrderDto>> Handle(GetMyOrdersQuery request, CancellationToken cancellationToken)
     {
-        var userId = _currentUserService.UserId ?? throw new UnauthorizedAccessException("User not authenticated");
+        var userId = _currentUserService.UserId ?? throw new UnauthorizedAccessException(_resourceManager.GetString("UserNotAuthenticated"));
 
         var optionsBuilder = new QueryOptionsBuilder<Order>()
             .WithPagination((request.PageNumber - 1) * request.PageSize, request.PageSize)

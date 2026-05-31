@@ -173,6 +173,24 @@ public class PaymentServiceTests : IDisposable
         txCount2.Should().Be(1); // Still 1 transaction record
     }
 
+    [Fact]
+    public void PaymentServices_ShouldGenerateCorrectCallbackUrls()
+    {
+        // Arrange
+        var vnPayService = new VnPayService(_mockConfiguration.Object);
+        var moMoService = new MoMoService(_mockConfiguration.Object, new Mock<IHttpClientFactory>().Object);
+        var payOsService = new PayOsService(_mockConfiguration.Object, new Mock<IHttpClientFactory>().Object);
+        var baseApiUrl = "http://localhost:5000";
+
+        // Act & Assert
+        vnPayService.GetCallbackUrl(baseApiUrl).Should().Be("http://localhost:5000/api/v1/payments/vnpay-callback");
+        moMoService.GetCallbackUrl(baseApiUrl).Should().Be("http://localhost:5000/api/v1/payments/momo-ipn");
+        payOsService.GetCallbackUrl(baseApiUrl).Should().Be("http://localhost:5000/api/v1/payments/payos-webhook");
+        
+        // Assert trailing slash handling
+        vnPayService.GetCallbackUrl("http://localhost:5000/").Should().Be("http://localhost:5000/api/v1/payments/vnpay-callback");
+    }
+
     private static string HmacSha512(string key, string inputData)
     {
         var hash = new StringBuilder();

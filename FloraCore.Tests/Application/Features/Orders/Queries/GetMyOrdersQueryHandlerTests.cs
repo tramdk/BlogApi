@@ -1,6 +1,7 @@
 using FloraCore.Application.Common.Interfaces;
 using FloraCore.Application.Common.Models;
 using FloraCore.Application.Features.Orders.Queries;
+using FloraCore.Application.Features.Orders.DTOs;
 using FloraCore.Domain.Entities;
 using Moq;
 using System;
@@ -22,6 +23,7 @@ public class GetMyOrdersQueryHandlerTests
 {
     private readonly Mock<IOrderRepository> _mockOrderRepository;
     private readonly Mock<ICurrentUserService> _mockCurrentUserService;
+    private readonly Mock<IResourceManager> _mockResourceManager;
     private readonly GetMyOrdersQueryHandler _handler;
 
     /// <summary>
@@ -31,7 +33,11 @@ public class GetMyOrdersQueryHandlerTests
     {
         _mockOrderRepository = new Mock<IOrderRepository>();
         _mockCurrentUserService = new Mock<ICurrentUserService>();
-        _handler = new GetMyOrdersQueryHandler(_mockOrderRepository.Object, _mockCurrentUserService.Object);
+        _mockResourceManager = new Mock<IResourceManager>();
+        _mockResourceManager.Setup(r => r.GetString(It.IsAny<string>())).Returns<string>(s => s); // Echo key back as fallback or message
+        _mockResourceManager.Setup(r => r.GetString("UserNotAuthenticated")).Returns("User not authenticated");
+        
+        _handler = new GetMyOrdersQueryHandler(_mockOrderRepository.Object, _mockCurrentUserService.Object, _mockResourceManager.Object);
     }
 
     /// <summary>

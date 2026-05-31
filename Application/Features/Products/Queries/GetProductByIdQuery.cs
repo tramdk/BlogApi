@@ -1,4 +1,4 @@
-using FloraCore.Application.Features.Products.Queries;
+using FloraCore.Application.Features.Products.DTOs;
 using FloraCore.Domain.Entities;
 using FloraCore.Application.Common.Interfaces;
 using MediatR;
@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 namespace FloraCore.Application.Features.Products.Queries;
 
+// Note: Guid is a value type and does not require ArgumentNullException.ThrowIfNull
 public record GetProductByIdQuery(Guid Id) : IRequest<ProductDto?>;
 
 public class GetProductByIdQueryHandler : IRequestHandler<GetProductByIdQuery, ProductDto?>

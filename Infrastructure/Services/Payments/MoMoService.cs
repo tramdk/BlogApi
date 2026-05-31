@@ -25,6 +25,8 @@ public class MoMoService(IConfiguration configuration, IHttpClientFactory httpCl
 
     public string GatewayName => PaymentMethod.MOMO;
 
+    public string GetCallbackUrl(string baseApiUrl) => $"{baseApiUrl.TrimEnd('/')}/api/v1/payments/momo-ipn";
+
     public async Task<CreatePaymentResult> CreatePaymentUrlAsync(OrderPaymentDto order)
     {
         try
@@ -38,7 +40,8 @@ public class MoMoService(IConfiguration configuration, IHttpClientFactory httpCl
             if (string.IsNullOrEmpty(endpoint) || string.IsNullOrEmpty(partnerCode) || 
                 string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
             {
-                throw new InvalidOperationException("One or more MoMo configuration values are missing.");
+                var msg = "One or more MoMo configuration values are missing.";
+                throw new InvalidOperationException(msg);
             }
 
             if (string.IsNullOrEmpty(ipnUrl))
@@ -46,7 +49,8 @@ public class MoMoService(IConfiguration configuration, IHttpClientFactory httpCl
                 var apiUrl = _configuration["PaymentGateways:ApiUrl"];
                 if (string.IsNullOrEmpty(apiUrl))
                 {
-                    throw new InvalidOperationException("Both MoMo:IpnUrl and PaymentGateways:ApiUrl are missing.");
+                    var msg = "Both MoMo:IpnUrl and PaymentGateways:ApiUrl are missing.";
+                    throw new InvalidOperationException(msg);
                 }
                 ipnUrl = $"{apiUrl.TrimEnd('/')}/api/v1/payments/momo-ipn";
             }
@@ -128,7 +132,8 @@ public class MoMoService(IConfiguration configuration, IHttpClientFactory httpCl
             var secretKey = _configuration["PaymentGateways:MoMo:SecretKey"];
             if (string.IsNullOrEmpty(secretKey))
             {
-                throw new InvalidOperationException("PaymentGateways:MoMo:SecretKey configuration is missing.");
+                var msg = "PaymentGateways:MoMo:SecretKey configuration is missing.";
+                throw new InvalidOperationException(msg);
             }
 
             // Verify MoMo Webhook/IPN

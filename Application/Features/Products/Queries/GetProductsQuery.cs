@@ -5,9 +5,11 @@ using MediatR;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
+using FloraCore.Application.Features.Products.DTOs;
 
 namespace FloraCore.Application.Features.Products.Queries;
 
+// Note: Optional parameters do not require ArgumentNullException.ThrowIfNull
 public record GetProductsQuery(int PageNumber = 1, int PageSize = 10, string? SearchTerm = null) : IRequest<PagedResult<ProductDto>>;
 
 public class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, PagedResult<ProductDto>>

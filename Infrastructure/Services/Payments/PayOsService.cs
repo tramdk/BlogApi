@@ -26,6 +26,8 @@ public class PayOsService(IConfiguration configuration, IHttpClientFactory httpC
 
     public string GatewayName => PaymentMethod.PAYOS;
 
+    public string GetCallbackUrl(string baseApiUrl) => $"{baseApiUrl.TrimEnd('/')}/api/v1/payments/payos-webhook";
+
     public async Task<CreatePaymentResult> CreatePaymentUrlAsync(OrderPaymentDto order)
     {
         try
@@ -38,7 +40,8 @@ public class PayOsService(IConfiguration configuration, IHttpClientFactory httpC
             if (string.IsNullOrEmpty(endpoint) || string.IsNullOrEmpty(clientId) || 
                 string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(checksumKey))
             {
-                throw new InvalidOperationException("One or more PayOS configuration values are missing.");
+                var msg = "One or more PayOS configuration values are missing.";
+                throw new InvalidOperationException(msg);
             }
 
             // PayOS requires orderCode as long (64-bit integer)
@@ -115,7 +118,8 @@ public class PayOsService(IConfiguration configuration, IHttpClientFactory httpC
             var checksumKey = _configuration["PaymentGateways:PayOS:ChecksumKey"];
             if (string.IsNullOrEmpty(checksumKey))
             {
-                throw new InvalidOperationException("PaymentGateways:PayOS:ChecksumKey configuration is missing.");
+                var msg = "PaymentGateways:PayOS:ChecksumKey configuration is missing.";
+                throw new InvalidOperationException(msg);
             }
 
             // In PayOS webhook, data signature is verification

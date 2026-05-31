@@ -1,5 +1,5 @@
 using FloraCore.Application.Interfaces;
-using FloraCore.Application.Products.DTOs;
+using FloraCore.Application.Features.Products.DTOs;
 using FloraCore.Domain.Entities;
 using FloraCore.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;

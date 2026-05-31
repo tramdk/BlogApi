@@ -46,13 +46,7 @@ public class InvokePaymentCommandHandler(
         // Get payment service according to the updated payment method
         var paymentService = _paymentServiceFactory.GetPaymentService(order.PaymentMethod);
         
-        var returnUrl = order.PaymentMethod switch
-        {
-            "VNPAY" => $"{request.ApiUrl}/api/v1/payments/vnpay-callback",
-            "MOMO" => $"{request.ApiUrl}/api/v1/payments/momo-ipn", // Or a dedicated frontend redirect url
-            "PAYOS" => $"{request.ApiUrl}/api/v1/payments/payos-webhook",
-            _ => $"{request.ApiUrl}/api/v1/payments/vnpay-callback"
-        };
+        var returnUrl = paymentService.GetCallbackUrl(request.ApiUrl);
 
         var orderPaymentDto = new OrderPaymentDto
         {

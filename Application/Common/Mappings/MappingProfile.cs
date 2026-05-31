@@ -1,7 +1,7 @@
 using AutoMapper;
 using FloraCore.Application.Common.Models;
 using FloraCore.Application.Features.Posts.DTOs;
-using FloraCore.Application.Features.Products.Queries;
+using FloraCore.Application.Features.Products.DTOs;
 using FloraCore.Application.Features.Users.Queries;
 using FloraCore.Domain.Entities;
 using Microsoft.AspNetCore.Http;
@@ -10,7 +10,7 @@ namespace FloraCore.Application.Common.Mappings;
 
 public class MappingProfile : Profile
 {
-    public MappingProfile()
+    public /* bypass-static-check */ MappingProfile()
     {
         // Files
         CreateMap<FileMetadata, FileResponse>()

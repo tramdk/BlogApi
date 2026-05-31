@@ -1,8 +1,7 @@
 using FloraCore.Application.Common.Models;
 using FloraCore.Application.Features.Products.Commands;
 using FloraCore.Application.Features.Products.Queries;
-using FloraCore.Application.Products.DTOs;
-using FloraCore.Application.Products.Queries;
+using FloraCore.Application.Features.Products.DTOs;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

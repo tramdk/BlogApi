@@ -123,6 +123,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddSingleton<IResourceManager, ResourceService>();
         services.AddValidatorsFromAssemblyContaining<Program>();
 
         services.AddMediatR(cfg =>

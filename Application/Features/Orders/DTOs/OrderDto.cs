@@ -2,7 +2,7 @@ using FloraCore.Domain.ValueObjects;
 using System;
 using System.Collections.Generic;
 
-namespace FloraCore.Application.Features.Orders.Queries;
+namespace FloraCore.Application.Features.Orders.DTOs;
 
 /// <summary>
 /// Data transfer object for order status history.

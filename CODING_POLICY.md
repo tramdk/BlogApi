@@ -16,6 +16,12 @@
 ### A. Kiến Trúc & Cấu Trúc Thư Mục
 Dự án áp dụng chặt chẽ **Clean Architecture + CQRS Pattern**. Hướng phụ thuộc: **Domain <- Application <- Infrastructure <- Controllers/API**.
 *   **Tên Namespace:** Phải tuân theo cấu trúc phân cấp: `FloraCore.{Tầng}.{Tính Năng}` (Ví dụ: `FloraCore.Application.Products.Queries`).
+*   **Cấu trúc chuẩn của một Feature Slice (Vertical Slice Directory Structure):**
+    Mỗi thư mục tính năng nằm trong `Application/Features/{Tính Năng}/` bắt buộc phải phân chia cấu trúc phân cấp nghiêm ngặt như sau (nếu có):
+    *   `Commands/`: Chứa các Command và Command Handler xử lý ghi (Write logic).
+    *   `Queries/`: Chứa các Query và Query Handler xử lý đọc (Read-only logic).
+    *   `DTOs/`: Chứa toàn bộ các Data Transfer Objects (DTO) phục vụ riêng cho tính năng này. **Tuyệt đối không** đặt trực tiếp DTO trong thư mục `Queries` hoặc `Commands`.
+    *   *Tên Namespace của DTO*: Phải tuân theo định dạng `FloraCore.Application.Features.{Tính Năng}.DTOs` (Ví dụ: `FloraCore.Application.Features.Products.DTOs`).
 *   **Controllers Rất Mỏng (Thin Controllers):** Controllers chỉ nhận request, ủy quyền xử lý hoàn toàn cho tầng Application thông qua MediatR, và trả về kết quả. Không chứa logic nghiệp vụ.
 *   **SOLID & Code Quality:**
     *   Đảm bảo tuân thủ nghiêm ngặt các nguyên lý SOLID (Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion).

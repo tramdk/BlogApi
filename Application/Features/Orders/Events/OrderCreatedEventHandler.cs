@@ -24,6 +24,8 @@ public class OrderCreatedEventHandler(
     IUnitOfWork unitOfWork,
     IGenericRepository<OutboxMessage, Guid> outboxRepository,
     IConfiguration configuration,
+    IResourceManager resourceManager,
+    IPaymentServiceFactory paymentServiceFactory,
     ILogger<OrderCreatedEventHandler> logger) : INotificationHandler<OrderCreatedEvent>
 {
     private readonly UserManager<AppUser> _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
@@ -33,6 +35,8 @@ public class OrderCreatedEventHandler(
     private readonly IUnitOfWork _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
     private readonly IGenericRepository<OutboxMessage, Guid> _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
     private readonly IConfiguration _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+    private readonly IResourceManager _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
+    private readonly IPaymentServiceFactory _paymentServiceFactory = paymentServiceFactory ?? throw new ArgumentNullException(nameof(paymentServiceFactory));
     private readonly ILogger<OrderCreatedEventHandler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
@@ -52,14 +56,18 @@ public class OrderCreatedEventHandler(
                     var apiUrl = _configuration["PaymentGateways:ApiUrl"];
                     if (string.IsNullOrEmpty(apiUrl))
                     {
-                        throw new InvalidOperationException("PaymentGateways:ApiUrl configuration is missing.");
+                        throw new InvalidOperationException(_resourceManager.GetString("PaymentConfigMissing"));
                     }
+
+                    var paymentService = _paymentServiceFactory.GetPaymentService(order.PaymentMethod);
+                    var returnUrl = paymentService.GetCallbackUrl(apiUrl);
+
                     var paymentPayload = System.Text.Json.JsonSerializer.Serialize(new OrderPaymentDto
                     {
                         OrderId = order.Id,
                         Amount = order.TotalAmount,
                         Description = $"Thanh toan don hang {order.Id}",
-                        ReturnUrl = $"{apiUrl}/api/v1/payments/vnpay-callback"
+                        ReturnUrl = returnUrl
                     });
 
                     var outbox = new OutboxMessage

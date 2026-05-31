@@ -23,6 +23,8 @@ public class VnPayService(IConfiguration configuration) : IPaymentService
 
     public string GatewayName => PaymentMethod.VNPAY;
 
+    public string GetCallbackUrl(string baseApiUrl) => $"{baseApiUrl.TrimEnd('/')}/api/v1/payments/vnpay-callback";
+
     public Task<CreatePaymentResult> CreatePaymentUrlAsync(OrderPaymentDto order)
     {
         try
@@ -33,7 +35,8 @@ public class VnPayService(IConfiguration configuration) : IPaymentService
 
             if (string.IsNullOrEmpty(vnpUrl) || string.IsNullOrEmpty(vnpTmnCode) || string.IsNullOrEmpty(vnpHashSecret))
             {
-                throw new InvalidOperationException("One or more VNPay configuration values are missing.");
+                var msg = "One or more VNPay configuration values are missing.";
+                throw new InvalidOperationException(msg);
             }
 
             var timeZoneById = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
@@ -87,7 +90,8 @@ public class VnPayService(IConfiguration configuration) : IPaymentService
             var vnpHashSecret = _configuration["PaymentGateways:VnPay:HashSecret"];
             if (string.IsNullOrEmpty(vnpHashSecret))
             {
-                throw new InvalidOperationException("PaymentGateways:VnPay:HashSecret configuration is missing.");
+                var msg = "PaymentGateways:VnPay:HashSecret configuration is missing.";
+                throw new InvalidOperationException(msg);
             }
             var secureHash = callbackData.QueryParameters.GetValueOrDefault("vnp_SecureHash") ?? string.Empty;
 

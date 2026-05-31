@@ -1,5 +1,6 @@
+using System.Collections.Generic;
 
-namespace FloraCore.Application.Features.Orders.Queries;
+namespace FloraCore.Application.Features.Orders.DTOs;
 
 /// <summary>
 /// DTO for order statistics.

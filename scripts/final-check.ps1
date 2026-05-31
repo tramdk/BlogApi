@@ -1,4 +1,4 @@
-﻿# scripts/final-check.ps1
+# scripts/final-check.ps1
 # Unified final check and validation script for FloraCore.
 # Enforces coding policies, architecture rules, test runs, and deployments.
 
@@ -17,41 +17,41 @@ if ($PSVersionTable.PSVersion.Major -ge 6) {
 
 # 1. Install Git Hooks
 function Install-Hooks {
-    Write-Host "🔧 Installing Local Git Hooks..." -ForegroundColor Cyan
+    Write-Host "[HOOKS] Installing Local Git Hooks..." -ForegroundColor Cyan
     $hooksDir = Join-Path $baseDir ".git/hooks"
     
     if (-not (Test-Path $hooksDir)) {
-        Write-Error "❌ Could not find .git. Are you in the project root?"
+        Write-Error "[FAIL] Could not find .git. Are you in the project root?"
         exit 1
     }
 
     # Write pre-commit hook (runs fast validations, then tests)
     $preCommitContent = @'
 #!/bin/sh
-echo "🔍 Running pre-commit validations..."
+echo "[RUN] Running pre-commit validations..."
 powershell.exe -ExecutionPolicy Bypass -Command "./scripts/final-check.ps1 validate-all"
 if [ $? -ne 0 ]; then
-    echo "❌ Pre-commit validation failed! Commit aborted."
+    echo "[FAIL] Pre-commit validation failed! Commit aborted."
     exit 1
 fi
 
-echo "🔍 Running pre-commit tests..."
+echo "[RUN] Running pre-commit tests..."
 powershell.exe -ExecutionPolicy Bypass -Command "./scripts/final-check.ps1 run-tests"
 if [ $? -ne 0 ]; then
-    echo "❌ Tests failed! Commit aborted. Please fix the tests before committing."
+    echo "[FAIL] Tests failed! Commit aborted. Please fix the tests before committing."
     exit 1
 fi
 
-echo "✅ All checks passed. Proceeding with commit..."
+echo "[PASS] All checks passed. Proceeding with commit..."
 exit 0
 '@
 
     # Write post-commit hook (triggers deployment)
     $postCommitContent = @'
 #!/bin/sh
-echo "🚀 Starting Automated Local Deploy (Docker Desktop)..."
+echo "[DEPLOY] Starting Automated Local Deploy (Docker Desktop)..."
 powershell.exe -ExecutionPolicy Bypass -Command "./scripts/final-check.ps1 deploy"
-echo "✅ Local deployment started in a new terminal..."
+echo "[PASS] Local deployment started in a new terminal..."
 exit 0
 '@
 
@@ -62,7 +62,7 @@ exit 0
     [System.IO.File]::WriteAllText($preCommitPath, $preCommitContent.Replace("`r`n", "`n"))
     [System.IO.File]::WriteAllText($postCommitPath, $postCommitContent.Replace("`r`n", "`n"))
 
-    Write-Host "✅ Hooks installed successfully!" -ForegroundColor Green
+    Write-Host "[PASS] Hooks installed successfully!" -ForegroundColor Green
     Write-Host "   - pre-commit: Runs static validations & tests before commit." -ForegroundColor Cyan
     Write-Host "   - post-commit: Triggers local Docker deployment after commit." -ForegroundColor Cyan
 }
@@ -82,12 +82,12 @@ function Validate-Architecture {
     foreach ($file in $appFiles) {
         $content = Get-Content $file.FullName -Raw
         if ($content -match "using FloraCore\.Infrastructure") {
-            $violations += "❌ $($file.FullName.Replace($baseDir, '')) imports Infrastructure"
+            $violations += "[FAIL] $($file.FullName.Replace($baseDir, '')) imports Infrastructure"
         }
     }
 
     if ($violations.Count -eq 0) {
-        Write-Host "   ✅ No Application -> Infrastructure dependencies found" -ForegroundColor Green
+        Write-Host "   [PASS] No Application -> Infrastructure dependencies found" -ForegroundColor Green
     }
 
     # Check 2: Interfaces should be in Application layer
@@ -97,13 +97,13 @@ function Validate-Architecture {
     foreach ($file in $infraInterfaces) {
         $content = Get-Content $file.FullName -Raw
         if ($content -match "public interface I[A-Z]") {
-            $violations += "⚠️  $($file.FullName.Replace($baseDir, '')) - Interface should be in Application"
+            $violations += "[WARN] $($file.FullName.Replace($baseDir, '')) - Interface should be in Application"
             $interfaceViolations++
         }
     }
 
     if ($interfaceViolations -eq 0) {
-        Write-Host "   ✅ All interfaces are in Application layer" -ForegroundColor Green
+        Write-Host "   [PASS] All interfaces are in Application layer" -ForegroundColor Green
     }
 
     # Check 3: Domain layer should have no dependencies
@@ -113,19 +113,19 @@ function Validate-Architecture {
     foreach ($file in $domainFiles) {
         $content = Get-Content $file.FullName -Raw
         if ($content -match "using FloraCore\.(Application|Infrastructure)") {
-            $violations += "❌ $($file.FullName.Replace($baseDir, '')) has dependencies on other layers"
+            $violations += "[FAIL] $($file.FullName.Replace($baseDir, '')) has dependencies on other layers"
             $domainViolations++
         }
     }
 
     if ($domainViolations -eq 0) {
-        Write-Host "   ✅ Domain layer is pure (no dependencies)" -ForegroundColor Green
+        Write-Host "   [PASS] Domain layer is pure (no dependencies)" -ForegroundColor Green
     }
 
     # Check 4: Count interfaces in correct location
     Write-Host "[4/4] Verifying interface organization..." -ForegroundColor Yellow
     $appInterfaces = Get-ChildItem -Path (Join-Path $baseDir "Application\Common\Interfaces") -Filter "*.cs" -ErrorAction SilentlyContinue
-    Write-Host "   ✅ Found $($appInterfaces.Count) interface(s) in Application/Common/Interfaces" -ForegroundColor Green
+    Write-Host "   [PASS] Found $($appInterfaces.Count) interface(s) in Application/Common/Interfaces" -ForegroundColor Green
 
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
@@ -133,11 +133,11 @@ function Validate-Architecture {
     Write-Host "========================================" -ForegroundColor Cyan
 
     if ($violations.Count -eq 0) {
-        Write-Host "✅ No Clean Architecture violations found!" -ForegroundColor Green
+        Write-Host "[PASS] No Clean Architecture violations found!" -ForegroundColor Green
         return $true
     }
     else {
-        Write-Host "❌ Found $($violations.Count) architecture violation(s):" -ForegroundColor Red
+        Write-Host "[FAIL] Found $($violations.Count) architecture violation(s):" -ForegroundColor Red
         Write-Host ""
         $violations | ForEach-Object { Write-Host "   $_" -ForegroundColor Yellow }
         Write-Host ""
@@ -162,7 +162,7 @@ function Validate-CodingPolicy {
     } | Where-Object { $_ -like "*.cs" -and (Test-Path $_) }
 
     if ($changedFiles.Count -eq 0) {
-        Write-Host "✅ No C# files changed. Skipping policy checks." -ForegroundColor Green
+        Write-Host "[PASS] No C# files changed. Skipping policy checks." -ForegroundColor Green
         return $true
     }
 
@@ -186,14 +186,24 @@ function Validate-CodingPolicy {
             # Check 1: Enforce Primary Constructor (traditional constructor should not match class name)
             $constructorPattern = "public\s+$className\s*\("
             if ($content -match $constructorPattern) {
-                $violations += "❌ $($file) - Uses traditional constructor instead of C# 12+ Primary Constructor."
+                $violations += "[FAIL] $($file) - Uses traditional constructor instead of C# 12+ Primary Constructor."
             }
 
             # Check 2: Verify primary constructor has null checks if parameters exist
             if ($content -match "(?:class|record|struct)\s+$className\s*\(\s*[^)]+\s*\)") {
                 if ($content -notmatch "ThrowIfNull" -and $content -notmatch "\?\?\s+throw") {
-                    $violations += "⚠️  $($file) - Primary constructor has parameters but no null-checks (ThrowIfNull) found."
+                    $violations += "[WARN] $($file) - Primary constructor has parameters but no null-checks (ThrowIfNull) found."
                 }
+            }
+
+            # Check 3: Enforce DTO placement rule (Application/Features/{FeatureName}/DTOs/)
+            if ($filename -like "*Dto.cs" -and $file -notlike "*\DTOs\*" -and $file -notlike "*/DTOs/*" -and $file -like "*Application*") {
+                $violations += "[FAIL] $($file) - DTO classes must be placed in a dedicated 'DTOs' folder under the feature slice (Application/Features/{FeatureName}/DTOs/)."
+            }
+
+            # Check 4: Enforce Resource Pattern for exceptions (avoid hardcoded strings in exceptions)
+            if ($content -match 'throw\s+new\s+[A-Za-z0-9_]+\s*\(\s*"[^"]+"\s*\)') {
+                $violations += "[WARN] $($file) - Contains hardcoded exception message. Must use Resource Pattern (IResourceManager) to load from .resx files."
             }
         }
     }
@@ -204,11 +214,11 @@ function Validate-CodingPolicy {
     Write-Host "========================================" -ForegroundColor Cyan
 
     if ($violations.Count -eq 0) {
-        Write-Host "✅ All changed files comply with coding policies!" -ForegroundColor Green
+        Write-Host "[PASS] All changed files comply with coding policies!" -ForegroundColor Green
         return $true
     }
     else {
-        Write-Host "❌ Found $($violations.Count) coding policy violation(s):" -ForegroundColor Red
+        Write-Host "[FAIL] Found $($violations.Count) coding policy violation(s):" -ForegroundColor Red
         Write-Host ""
         $violations | ForEach-Object { Write-Host "   $_" -ForegroundColor Yellow }
         Write-Host ""
@@ -218,17 +228,17 @@ function Validate-CodingPolicy {
 
 # 4. Run Test Suite
 function Run-Tests {
-    Write-Host "🧪 Running test suite..." -ForegroundColor Cyan
+    Write-Host "[TEST] Running test suite..." -ForegroundColor Cyan
     dotnet test (Join-Path $baseDir "FloraCore.Tests/FloraCore.Tests.csproj")
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "❌ Tests failed!"
+        Write-Error "[FAIL] Tests failed!"
         exit 1
     }
 }
 
 # 5. Local Docker Deployment
 function Deploy {
-    Write-Host "🚀 Starting Automated Local Deploy (Docker Desktop)..." -ForegroundColor Cyan
+    Write-Host "[DEPLOY] Starting Automated Local Deploy (Docker Desktop)..." -ForegroundColor Cyan
     Start-Process powershell -ArgumentList '-NoExit', '-ExecutionPolicy Bypass', '-File ./deploy-docker.ps1' -WindowStyle Normal
 }
 
@@ -246,22 +256,22 @@ switch ($Action) {
         if (-not $result) { exit 1 }
     }
     "validate-all" {
-        # Sắp xếp thứ tự logic: chạy các static checks nhanh nhất trước để tối ưu hóa thời gian phản hồi
-        Write-Host "⏳ Running static validations..." -ForegroundColor Cyan
+        # Organize logic: run fastest static checks first to optimize response time
+        Write-Host "[RUN] Running static validations..." -ForegroundColor Cyan
         
         $archResult = Validate-Architecture
         if (-not $archResult) {
-            Write-Error "❌ Clean Architecture check failed!"
+            Write-Error "[FAIL] Clean Architecture check failed!"
             exit 1
         }
         
         $policyResult = Validate-CodingPolicy
         if (-not $policyResult) {
-            Write-Error "❌ Coding Policy check failed!"
+            Write-Error "[FAIL] Coding Policy check failed!"
             exit 1
         }
         
-        Write-Host "✅ All static validations passed successfully!" -ForegroundColor Green
+        Write-Host "[PASS] All static validations passed successfully!" -ForegroundColor Green
     }
     "run-tests" {
         Run-Tests

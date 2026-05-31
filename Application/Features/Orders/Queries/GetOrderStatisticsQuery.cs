@@ -1,5 +1,6 @@
 
 using MediatR;
+using FloraCore.Application.Features.Orders.DTOs;
 using System;
 
 namespace FloraCore.Application.Features.Orders.Queries;

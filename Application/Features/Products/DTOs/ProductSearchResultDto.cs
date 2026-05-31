@@ -1,4 +1,6 @@
-namespace FloraCore.Application.Products.DTOs;
+using System;
+
+namespace FloraCore.Application.Features.Products.DTOs;
 
 /// <summary>
 /// Represents the result of a product search.

@@ -6,6 +6,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FloraCore.Application.Interfaces;
+using FloraCore.Application.Features.Orders.DTOs;
 using FloraCore.Application.Common.Models;
 using System.Linq;
 
@@ -14,6 +15,7 @@ namespace FloraCore.Application.Features.Orders.Queries;
 /// <summary>
 /// Query to get order by its identifier.
 /// </summary>
+// Note: Guid is a value type and does not require ArgumentNullException.ThrowIfNull
 public record GetOrderByIdQuery(Guid Id) : IRequest<OrderDto?>;
 
 /// <summary>

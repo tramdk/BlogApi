@@ -9,6 +9,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using FloraCore.Application.Interfaces;
+using FloraCore.Application.Features.Orders.DTOs;
 
 namespace FloraCore.Application.Features.Orders.Queries;
 

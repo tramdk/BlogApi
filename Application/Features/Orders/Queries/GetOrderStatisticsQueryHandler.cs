@@ -2,6 +2,7 @@
 using FloraCore.Application.Common.Interfaces;
 using FloraCore.Domain.Entities;
 using MediatR;
+using FloraCore.Application.Features.Orders.DTOs;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -34,7 +35,14 @@ public class GetOrderStatisticsQueryHandler(IGenericRepository<Order, Guid> orde
             query = query.Where(o => o.OrderDate <= request.EndDate.Value);
         }
 
-        var orders = await query.ToListAsync(cancellationToken);
+        var orders = await query
+            .Select(o => new
+            {
+                o.TotalAmount,
+                o.OrderStatus,
+                o.OrderDate
+            })
+            .ToListAsync(cancellationToken);
 
         if (!orders.Any())
         {

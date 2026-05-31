@@ -1,5 +1,5 @@
 using FloraCore.Application.Common.Interfaces;
-using FloraCore.Application.Products.DTOs;
+using FloraCore.Application.Features.Products.DTOs;
 using FloraCore.Domain.Entities;
 
 namespace FloraCore.Application.Interfaces;

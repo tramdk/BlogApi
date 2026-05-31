@@ -1,6 +1,6 @@
 using FloraCore.Application.Interfaces;
-using FloraCore.Application.Products.DTOs;
-using FloraCore.Application.Products.Queries;
+using FloraCore.Application.Features.Products.Queries;
+using FloraCore.Application.Features.Products.DTOs;
 using Moq;
 using System;
 using System.Collections.Generic;

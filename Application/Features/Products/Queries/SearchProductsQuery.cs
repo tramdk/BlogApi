@@ -1,7 +1,7 @@
 using MediatR;
-using FloraCore.Application.Products.DTOs;
+using FloraCore.Application.Features.Products.DTOs;
 
-namespace FloraCore.Application.Products.Queries;
+namespace FloraCore.Application.Features.Products.Queries;
 
 /// <summary>
 /// Represents a query to search for products.
