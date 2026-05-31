@@ -66,6 +66,12 @@ public class OrdersController(IMediator mediator) : ControllerBase
     /// <summary>
     /// Updates order shipping details and/or payment method (Combined flow).
     /// </summary>
+    /// <remarks>
+    /// LUẬT NGHIỆP VỤ: 
+    /// 1. Chỉ cho phép thực thi khi đơn hàng ở trạng thái 'Pending' và trạng thái thanh toán 'Pending'. Nếu không, trả về lỗi 400 Bad Request.
+    /// 2. Cho phép cập nhật thông tin vận chuyển và phương thức thanh toán. 
+    /// 3. Nếu phương thức thanh toán thay đổi so với phương thức cũ, hệ thống tự động xóa PaymentUrl cũ (set null) để đảm bảo tính nhất quán của giao dịch.
+    /// </remarks>
     [HttpPut("{id}/details")]
     public async Task<IActionResult> UpdateDetails(Guid id, UpdateOrderDetailsCommand command)
     {
@@ -77,6 +83,12 @@ public class OrdersController(IMediator mediator) : ControllerBase
     /// <summary>
     /// Invokes the online payment processing to retrieve a fresh payment URL (Lazy generation).
     /// </summary>
+    /// <remarks>
+    /// LUẬT NGHIỆP VỤ: 
+    /// 1. Chỉ cho phép sinh link thanh toán cho các đơn hàng có trạng thái 'Pending' và trạng thái thanh toán 'Pending'.
+    /// 2. Chỉ hỗ trợ các phương thức thanh toán trực tuyến (VNPAY, MOMO, PAYOS). Không hỗ trợ COD.
+    /// 3. Link thanh toán sẽ được tự động cấu hình callback/webhook động tương ứng theo cổng được chọn để cập nhật tự động trạng thái đơn hàng.
+    /// </remarks>
     [HttpPost("{id}/pay")]
     public async Task<IActionResult> Pay(Guid id, [FromServices] Microsoft.Extensions.Configuration.IConfiguration configuration)
     {
@@ -119,6 +131,11 @@ public class OrdersController(IMediator mediator) : ControllerBase
     /// <summary>
     /// Gets order statistics for administrators.
     /// </summary>
+    /// <remarks>
+    /// LUẬT NGHIỆP VỤ &amp; TỐI ƯU HÓA: 
+    /// 1. API thống kê doanh thu, tổng số đơn hàng, giá trị đơn hàng trung bình, phân nhóm theo trạng thái và theo tháng cho quản trị viên.
+    /// 2. Được cấu hình để thực hiện tối ưu hóa truy vấn thông qua cơ chế Projection, tránh tải các thực thể (entities) đầy đủ lên bộ nhớ để ngăn ngừa lỗi Over-fetching và tràn RAM khi khối lượng đơn hàng lớn.
+    /// </remarks>
     /// <param name="startDate">Optional start date to filter orders.</param>
     /// <param name="endDate">Optional end date to filter orders.</param>
     /// <returns>Order statistics.</returns>
